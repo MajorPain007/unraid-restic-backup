@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: none
+      - name: Unit tests, static checks, syntax
+        run: bash tests/run.sh
+
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      RESTIC_VERSION: 0.19.1
+      RESTIC_SHA256: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
+      REST_SERVER_VERSION: 0.14.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: none
+      - name: Install restic, rest-server and an SSH server
+        run: |
+          curl -fsSLO "https://github.com/restic/restic/releases/download/v${RESTIC_VERSION}/restic_${RESTIC_VERSION}_linux_amd64.bz2"
+          echo "${RESTIC_SHA256}  restic_${RESTIC_VERSION}_linux_amd64.bz2" | sha256sum -c -
+          bunzip2 "restic_${RESTIC_VERSION}_linux_amd64.bz2"
+          sudo install -m 0755 "restic_${RESTIC_VERSION}_linux_amd64" /usr/local/bin/restic
+          curl -fsSLO "https://github.com/restic/rest-server/releases/download/v${REST_SERVER_VERSION}/rest-server_${REST_SERVER_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "https://github.com/restic/rest-server/releases/download/v${REST_SERVER_VERSION}/SHA256SUMS" | grep " rest-server_${REST_SERVER_VERSION}_linux_amd64.tar.gz$" | sha256sum -c -
+          tar xzf "rest-server_${REST_SERVER_VERSION}_linux_amd64.tar.gz"
+          sudo install -m 0755 "rest-server_${REST_SERVER_VERSION}_linux_amd64/rest-server" /usr/local/bin/rest-server
+          sudo apt-get install -y -q openssh-server fuse3 >/dev/null
+          sudo systemctl start ssh
+          sudo modprobe fuse || true
+      - name: Runner and scheduler
+        run: sudo -E env "PATH=$PATH" bash tests/integration/run.sh
+      - name: The web interface's actions
+        run: sudo -E env "PATH=$PATH" bash tests/integration/api.sh
+      - name: The preview against restic
+        run: sudo -E env "PATH=$PATH" bash tests/integration/preview.sh
+      - name: Browsing through restic mount
+        run: sudo -E env "PATH=$PATH" bash tests/integration/browse.sh
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          RB_OUT_DIR=dist RB_SKIP_PLG=1 ./scripts/build.sh 2026.01.01.01
+          tar -tJf dist/restic.backup-2026.01.01.01-x86_64-1.txz | grep -q 'usr/local/emhttp/plugins/restic.backup/scripts/scheduler.php'
+      - name: A test build changes nothing tracked
+        run: git diff --exit-code

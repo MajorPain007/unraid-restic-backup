@@ -1,0 +1,262 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name      "restic.backup">
+<!ENTITY author    "MajorPain007">
+<!ENTITY version   "2026.10.04.04">
+<!ENTITY md5       "727b4a8665dd9835451bce5a1878260c">
+<!ENTITY launch    "Settings/ResticBackup">
+<!ENTITY github    "MajorPain007/unraid-restic-backup">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/src/&name;.plg">
+<!ENTITY pkgURL    "https://raw.githubusercontent.com/&github;/main/archive">
+<!ENTITY pluginDir "/usr/local/emhttp/plugins/&name;">
+<!ENTITY configDir "/boot/config/plugins/&name;">
+<!ENTITY resticDir "/usr/local/lib/&name;">
+<!ENTITY resticVer "0.19.1">
+<!ENTITY resticSha "f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c">
+]>
+
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;"
+        pluginURL="&pluginURL;"
+        min="6.12.0"
+        icon="history">
+
+<CHANGES>
+## Version 2026.10.04.04 - Leaner source
+
+- The comments are gone from the source files. Nothing changes in how the
+  plugin works.
+
+## Version 2026.10.04.03 - What gets backed up, at once
+
+- The job editor shows the job's folders as a tree under Leave out, each
+  entry marked: a check for backed up, a cross for left out, with the rule
+  that leaves it out. A folder is checked against the rules when it opens,
+  in milliseconds, as nothing below it is read; the tree follows the rules
+  as they are typed.
+- A click on the mark leaves a file or folder out or takes it back, and the
+  rules follow. What a pattern such as *.log leaves out can be backed up
+  anyway.
+- What gets backed up, in a job's menu, shows the same tree. Adding up the
+  sizes goes through every file and takes minutes for large shares; it is
+  now Measure sizes.
+
+## Version 2026.10.04.02 - Browsing snapshots without the wait
+
+- Folders of a snapshot open at once. Until now every folder ran restic
+  anew, and restic loads the repository's whole index before it lists
+  anything: about 8 seconds per folder for an 850 GB repository, however
+  small the folder. Now the first folder starts restic mount, which loads
+  the index once and then answers from memory, for every snapshot of the
+  repository - a few milliseconds per folder.
+- The mount ends after 10 minutes without use, when a backup, a clean-up
+  or a check on the repository starts or ends, and when the array stops.
+  While it runs it needs memory, about 1 GB for 850 GB of backups. Where it
+  cannot work, folders are listed the old way.
+
+## Version 2026.10.04.01 - The plugin's cache stayed in backups
+
+- A job backing up the pool path of appdata, such as /mnt/cache/appdata,
+  backed up the plugin's own restic cache, several gigabytes of it: the
+  data folder is set as /mnt/user/appdata/restic.backup, and the plugin
+  only left it out when a source was written the same way. Both ways are
+  now recognised, for the cache, the temporary files and a local
+  repository inside a source. The preview shows it under Left out.
+- The log of a run lists its cleanup steps plainly instead of as Undoing.
+
+## Version 2026.10.03.09 - Preview and size history
+
+- What gets backed up: a preview of a job, in its menu and in the editor,
+  for unsaved changes too. It shows how much a backup would read, what each
+  exclude rule leaves out - and which rules match nothing, perhaps misspelt -
+  the largest folders and the largest files. It goes through the folders
+  with restic's own rules, reading names and sizes only.
+- Size history, in the menus of repositories and jobs: a repository's size
+  on disk over time, and per job how much each backup read and added.
+- Exclude patterns with a dollar sign did not work: restic expands
+  environment variables in exclude files, so the recycle bin pattern ending
+  in /$RECYCLE.BIN matched folders named .BIN instead. Patterns are now
+  passed on literally.
+
+## Version 2026.10.03.08 - Settings icon
+
+- The tile under Settings, Utilities showed Unraid's default icon. It has the
+  plugin's own icon now, as the Plugins page does.
+
+## Version 2026.10.03.07 - ZFS where it can, the scheduler after updates
+
+- A job with a ZFS consistency setting backs up what is on ZFS from a
+  snapshot and reads the rest - /boot, a share on an array disk - as it is.
+  Before, the whole job was refused. The job editor lists the folders read
+  as they are.
+- After an update the scheduler could be missing from Unraid's crontab, and
+  no scheduled backup started. The plugin manager replaces the plugin's
+  registration right after the install script, and the script registered
+  the schedule in that moment. It now waits for the new registration and
+  checks the crontab.
+- For a new job, choosing a consistency setting showed nothing below the
+  cards: the list of containers to stop was missing.
+- The Plugins page shows Restic Backup with a description, and a fitting
+  icon.
+
+## Version 2026.10.03.06 - SSH servers
+
+- The command given for putting the key onto a Hetzner Storage Box failed on
+  Unraid: ssh-copy-id -s keeps a socket in ~/.ssh, which on Unraid is on the
+  flash drive, and FAT allows no sockets. It is Hetzner's own install-ssh-key
+  now, which also keeps the keys already there.
+- The server choice for SFTP repositories is down to an SSH server - Unraid,
+  NAS, Linux, VPS - or a Hetzner Storage Box. All are reached the same way;
+  a Storage Box differs only in its port and in how a key gets onto it. A
+  Storage Box host name selects it by itself, with port 23.
+
+## Version 2026.10.03.05 - Repository icon
+
+- The icon on a repository card sits in a square tile of its own, centred and
+  a little larger. It borrowed the style of the small labels before and could
+  come out taller than wide.
+
+## Version 2026.10.03.04 - Folders and colours
+
+- Dialogs lay below Unraid's footer, which covered the buttons at their foot.
+  They are above it now.
+- The folder picker can make a new folder - for a repository, a restore or
+  the data folder - owned and permitted like the folder it is made in. Not in
+  /mnt itself, in memory or on the flash drive.
+- Folders to back up can be ticked several at a time, from different places
+  too.
+- What is selected - a snapshot, the bar for ticked files, a chosen option -
+  is marked in a cool slate. The accent orange, laid thinly over the dark
+  themes, looked brown.
+- Check boxes and scroll bars are drawn dark on dark themes instead of white.
+
+## Version 2026.10.03.03 - ZFS snapshots nothing can hold on to
+
+- A container started while a backup ran - one that watchtower updated, say -
+  could keep the backup's ZFS snapshot busy, and the snapshot stayed behind.
+  The snapshots were opened through .zfs/snapshot, which mounts them for the
+  whole server; Docker binds a folder with everything mounted inside it, and
+  Unraid starts containers with a copy of all mounts. They are now mounted
+  only where restic runs, and no other process sees them.
+- Should a container hold a copy anyway - someone opened the snapshot during
+  the backup - the copy is unmounted in the container and the snapshot
+  removed. A snapshot busy for another reason is tried again every minute
+  instead of being left behind.
+- Containers and VMs stopped for the whole backup start again as soon as
+  restic has read the data, not only after old snapshots are cleaned up and
+  the repository is measured. ZFS snapshots are removed at that point too.
+- The log line with a backup's result showed no numbers.
+
+## Version 2026.10.03.02 - Fixes from the first run on a real server
+
+- Option descriptions and table text ran over their edges. Unraid's own
+  stylesheet keeps every button and table cell on one line; the plugin's styles
+  now undo that inside the page. A status class that Unraid colours red is
+  renamed.
+- Containers that mount a parent folder of a backup - file managers with all of
+  /mnt or /mnt/user mounted - counted as users of the data. They were suggested
+  for stopping, and every backup with a stop list warned about them. They are
+  listed apart now and left running unless chosen.
+- Notifications are sent without waiting for them. Unraid runs notification
+  agents one after another, and one that did not answer held the scheduler for
+  minutes; cron starts no new scheduler while the last one runs, so a scheduled
+  backup could be held up meanwhile.
+- After an interrupted backup, what cannot be put back at once - a ZFS snapshot
+  still busy - is tried again every minute instead of being given up.
+- Containers are stopped with the timeout set in Settings, Docker, as Unraid
+  does when the array stops.
+- ZFS snapshots on more than one pool are taken pool by pool; one zfs snapshot
+  command cannot span pools.
+- A folder in /mnt that is neither a pool nor a disk, or an empty share folder
+  on another disk, no longer makes a share look spread over several.
+- The page warns when the scheduler has not run for three minutes.
+
+## Version 2026.10.03.01 - First release
+
+Backups with restic, set up and watched from the Unraid web interface.
+
+- Repositories on a local disk or pool, on an SFTP server - another Unraid, a
+  NAS, a Hetzner Storage Box, any Linux server - or on a restic REST server.
+  SFTP uses an SSH key the plugin makes for each repository; the server's host
+  key is shown and confirmed before the first connection.
+- Backup jobs with their own folders, exclusions, schedule and retention.
+  Schedules are evaluated by the plugin, not written into the crontab, so a
+  run missed while the server was off happens when it is back.
+- Data in use: per job, back up as it is, from a ZFS snapshot, from a ZFS
+  snapshot taken with the containers and VMs using the data briefly stopped,
+  or with them stopped for the whole backup.
+- Snapshots: browse, restore files and folders in place or into another
+  folder, download, search across snapshots, compare two.
+- Prune and check on their own schedules, Unraid notifications, an optional
+  Healthchecks ping, commands before and after a backup.
+- restic 0.19.1 is downloaded from its GitHub release and checked against the
+  SHA-256 published with it.
+</CHANGES>
+
+<FILE Name="&configDir;/restic_&resticVer;_linux_amd64.bz2">
+<URL>https://github.com/restic/restic/releases/download/v&resticVer;/restic_&resticVer;_linux_amd64.bz2</URL>
+<SHA256>&resticSha;</SHA256>
+</FILE>
+
+<FILE Name="&configDir;/&name;-&version;-x86_64-1.txz" Run="upgradepkg --install-new">
+<URL>&pkgURL;/&name;-&version;-x86_64-1.txz</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<FILE Run="/bin/bash">
+<INLINE>
+set -u
+mkdir -p &resticDir;
+if ! bunzip2 -c &configDir;/restic_&resticVer;_linux_amd64.bz2 &gt; &resticDir;/restic.new; then
+  echo "Could not unpack restic." &gt;&amp;2
+  exit 1
+fi
+chmod 755 &resticDir;/restic.new
+mv -f &resticDir;/restic.new &resticDir;/restic
+
+for f in &configDir;/restic_*_linux_amd64.bz2 &configDir;/&name;-*.txz; do
+  case "$f" in
+    *_&resticVer;_*|*-&version;-*) ;;
+    *) rm -f "$f" ;;
+  esac
+done
+
+[ -e /usr/local/bin/restic ] || ln -s &resticDir;/restic /usr/local/bin/restic
+
+for d in secrets ssh; do
+  mkdir -p &configDir;/$d
+  [ -f &configDir;/$d/.gitignore ] || echo '*' &gt; &configDir;/$d/.gitignore
+done
+
+CRON='* * * * * /usr/bin/php &pluginDir;/scripts/scheduler.php &gt;/dev/null 2&gt;&amp;1'
+[ "$(cat &configDir;/&name;.cron 2&gt;/dev/null)" = "$CRON" ] || echo "$CRON" &gt; &configDir;/&name;.cron
+START=$(date +%s)
+( for i in $(seq 1 90); do
+    sleep 2
+    L=/var/log/plugins/&name;.plg
+    { [ -L "$L" ] || [ -e "$L" ]; } &amp;&amp; [ "$(stat -c %Y "$L")" -ge "$START" ] || continue
+    crontab -c /etc/cron.d -l 2&gt;/dev/null | grep -qF '&pluginDir;/scripts/scheduler.php' &amp;&amp; break
+    /usr/local/sbin/update_cron
+  done ) &gt;/dev/null 2&gt;&amp;1 &lt;/dev/null &amp;
+
+mkdir -p /tmp/&name;
+echo
+echo "Restic Backup is installed: Settings, Utilities, Restic Backup."
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+[ -f &pluginDir;/scripts/stop_all.php ] &amp;&amp; /usr/bin/php &pluginDir;/scripts/stop_all.php 60
+rm -f &configDir;/&name;.cron
+command -v update_cron &gt;/dev/null 2&gt;&amp;1 &amp;&amp; update_cron &gt;/dev/null 2&gt;&amp;1
+if [ "$(readlink /usr/local/bin/restic 2&gt;/dev/null)" = "&resticDir;/restic" ]; then
+  rm -f /usr/local/bin/restic
+fi
+removepkg &name; 2&gt;/dev/null || rm -rf &pluginDir;
+rm -rf &resticDir; /tmp/&name;
+echo "Restic Backup removed. Your backups are untouched. Repository passwords, SSH keys and"
+echo "settings stay in &configDir; - keep them while you may need the backups."
+</INLINE>
+</FILE>
+
+</PLUGIN>

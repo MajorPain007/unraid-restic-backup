@@ -1,0 +1,7 @@
+Menu="Utilities"
+Title="Restic Backup"
+Icon="history"
+Tag="history"
+Markdown="false"
+---
+<?php include '/usr/local/emhttp/plugins/restic.backup/include/page.php'; ?>

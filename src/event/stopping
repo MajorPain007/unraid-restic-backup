@@ -1,0 +1,3 @@
+#!/bin/bash
+rm -f /tmp/restic.backup/array_started
+/usr/bin/php /usr/local/emhttp/plugins/restic.backup/scripts/stop_all.php 90 >/dev/null 2>&1

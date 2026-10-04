@@ -1,0 +1,9 @@
+Menu="Tasks:72"
+Type="xmenu"
+Title="Backup"
+Icon="history"
+Tag="history"
+Markdown="false"
+Cond="(@json_decode(@file_get_contents('/boot/config/plugins/restic.backup/config.json'), true)['settings']['show_in_menu'] ?? false)"
+---
+<?php include '/usr/local/emhttp/plugins/restic.backup/include/page.php'; ?>

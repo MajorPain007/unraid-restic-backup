@@ -1,0 +1,3 @@
+#!/bin/bash
+mkdir -p /tmp/restic.backup
+date +%s > /tmp/restic.backup/array_started

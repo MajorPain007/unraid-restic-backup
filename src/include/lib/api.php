@@ -221,6 +221,7 @@ function rb_api_overview(array $p)
             'data_dir_ok'   => is_dir($settings['data_dir']),
             'timezone'      => date_default_timezone_get(),
             'scheduler_tick' => (int)@filemtime(RB_RUN_DIR . '/scheduler.tick'),
+            'installed'     => (int)(@lstat('/var/log/plugins/' . RB_NAME . '.plg')['mtime'] ?? 0),
         ),
     );
 }

@@ -2,8 +2,8 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "restic.backup">
 <!ENTITY author    "MajorPain007">
-<!ENTITY version   "2026.10.04.04">
-<!ENTITY md5       "727b4a8665dd9835451bce5a1878260c">
+<!ENTITY version   "2026.10.04.05">
+<!ENTITY md5       "42e2d11ab8823c1813bdb0d414a89daa">
 <!ENTITY launch    "Settings/ResticBackup">
 <!ENTITY github    "MajorPain007/unraid-restic-backup">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/src/&name;.plg">
@@ -21,6 +21,12 @@
         icon="history">
 
 <CHANGES>
+## Version 2026.10.04.05 - No false alarm after installing
+
+- Right after installing, the page said the scheduler had not run yet,
+  until cron started it at the next full minute. It now waits three
+  minutes before it says so.
+
 ## Version 2026.10.04.04 - Leaner source
 
 - The comments are gone from the source files. Nothing changes in how the

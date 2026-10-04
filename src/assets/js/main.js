@@ -135,7 +135,8 @@
             note('err', 'alert', 'restic is not installed. Reinstall the plugin, and check the plugin log for why the download failed.');
         }
         var scheduled = o.config.jobs.some(function (j) { return j.enabled && j.schedule.mode !== 'off'; });
-        if (scheduled && (!sys.scheduler_tick || o.now - sys.scheduler_tick > 180)) {
+        var fresh = !sys.scheduler_tick && sys.installed && o.now - sys.installed < 180;
+        if (scheduled && !fresh && (!sys.scheduler_tick || o.now - sys.scheduler_tick > 180)) {
             note('err', 'clock', sys.scheduler_tick
                 ? 'The scheduler last ran ' + RB.relative(sys.scheduler_tick) + ' - scheduled backups are not starting. ' +
                   'Reinstalling the plugin registers it with cron again.'

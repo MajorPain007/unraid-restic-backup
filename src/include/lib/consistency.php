@@ -290,9 +290,21 @@ function rb_zfs_release($name, $log = null)
     }
 }
 
-function rb_zfs_wrap(array $cmd, array $plan, $snap, $stageDir)
+function rb_zfs_wrap(array $cmd, array $plan, $snap, $stageDir, array $writable = array())
 {
     $script = "set -e\n";
+    $keep = array();
+    foreach ($writable as $w) {
+        foreach ($plan['binds'] as $b) {
+            if (rb_under($w, $b[3])) {
+                $keep[$w] = "$stageDir/w" . count($keep);
+                @mkdir($w, 0755, true);
+                @mkdir($keep[$w], 0700, true);
+                $script .= 'mount --bind ' . escapeshellarg($w) . ' ' . escapeshellarg($keep[$w]) . "\n";
+                break;
+            }
+        }
+    }
     $dirs = array();
     foreach ($plan['binds'] as $b) {
         if (!isset($dirs[$b[0]])) {
@@ -306,6 +318,10 @@ function rb_zfs_wrap(array $cmd, array $plan, $snap, $stageDir)
         $missing = "The snapshot of {$b[0]} has no " . ($b[2] !== '' ? $b[2] : '/') . '.';
         $script .= '[ -e ' . escapeshellarg($from) . ' ] || { echo ' . escapeshellarg($missing) . " >&2; exit 1; }\n";
         $script .= 'mount --bind ' . escapeshellarg($from) . ' ' . escapeshellarg($b[3]) . "\n";
+    }
+    foreach ($keep as $w => $held) {
+        $script .= '[ -d ' . escapeshellarg($w) . ' ] || { echo ' . escapeshellarg("$w is not in the snapshot, so restic cannot write there.") . " >&2; exit 1; }\n";
+        $script .= 'mount --bind ' . escapeshellarg($held) . ' ' . escapeshellarg($w) . "\n";
     }
     $script .= 'exec "$@"' . "\n";
     return array_merge(array('unshare', '--mount', '--propagation', 'private', '--', '/bin/sh', '-c', $script, 'sh'), $cmd);

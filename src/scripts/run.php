@@ -499,8 +499,9 @@ function rb_prepare_consistency(RbRun $r, array $job)
         $r->phase('Starting containers and VMs again');
         $startAgain();
     }
-    return array(true, function (array $cmd) use ($plan, $snap, $stage) {
-        return rb_zfs_wrap($cmd, $plan, $snap, $stage);
+    $writable = array($r->settings['data_dir'] . '/cache', $r->settings['data_dir'] . '/tmp');
+    return array(true, function (array $cmd) use ($plan, $snap, $stage, $writable) {
+        return rb_zfs_wrap($cmd, $plan, $snap, $stage, $writable);
     });
 }
 

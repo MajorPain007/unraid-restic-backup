@@ -72,6 +72,18 @@ $RUN backup j00000001 manual
 check "the next run finds its parent: unchanged files are not read again" '[ "$(op_field summary.files_unmodified)" -ge 2 ]' \
     "$(op_field summary)"
 
+group "The data folder inside the snapshotted dataset"
+mkdir -p /mnt/rbtpool/rbshare/rbdata
+$CFG settings "{\"data_dir\":\"/mnt/rbtpool/rbshare/rbdata\",\"start_delay\":0}"
+$CFG job '{"id":"j00000007","name":"Own data","repo":"r00000001","sources":["/mnt/rbtpool/rbshare"],"consistency":{"mode":"zfs"},"retention":{"enabled":false}}'
+$RUN backup j00000007 manual
+check "restic can still write its cache: the backup succeeds" '[ "$(op_field status)" = success ]' "$(op_field error) $(tail -5 "$(op_field log)")"
+check "the cache was written to the live folder, not the snapshot" '[ -n "$(ls /mnt/rbtpool/rbshare/rbdata/cache 2>/dev/null)" ]'
+check "the cache is not in the backup" '! restic -r $M/repo ls latest | grep -q "^/mnt/rbtpool/rbshare/rbdata/cache/"'
+check "nothing of it is left mounted" '! grep -q "@restic-backup" /proc/self/mountinfo && [ -z "$(zfs list -H -t snapshot -o name -r $POOL | grep restic-backup)" ]'
+$CFG settings "{\"data_dir\":\"$M/data\",\"start_delay\":0}"
+rm -rf /mnt/rbtpool/rbshare/rbdata
+
 group "ZFS where it can, the rest as it is"
 $CFG job "{\"id\":\"j00000006\",\"name\":\"Mixed\",\"repo\":\"r00000001\",\"sources\":[\"/mnt/user/rbshare\",\"$M/src\"],\"consistency\":{\"mode\":\"zfs\"},\"retention\":{\"enabled\":false}}"
 r=$($API consistency_detect "{\"sources\":[\"/mnt/user/rbshare\",\"$M/src\"]}")

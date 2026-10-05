@@ -40,7 +40,7 @@ function rb_restic_env(array $repo, array $settings)
         'RESTIC_REPOSITORY'    => rb_repo_url($repo),
         'RESTIC_PASSWORD_FILE' => rb_secret_file($repo['id'], 'password'),
         'RESTIC_CACHE_DIR'     => $settings['data_dir'] . '/cache',
-        'TMPDIR'               => $settings['data_dir'] . '/tmp',
+        'TMPDIR'               => RB_RUN_DIR . '/tmp',
         'RESTIC_PROGRESS_FPS'  => '1',
     );
     if ($repo['type'] === 'rest') {

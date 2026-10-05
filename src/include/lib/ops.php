@@ -7,11 +7,14 @@ define('RB_LOCK_DIR', RB_RUN_DIR . '/locks');
 
 function rb_prepare_data_dir(array $settings)
 {
-    foreach (array('', '/cache', '/tmp', '/logs') as $sub) {
+    foreach (array('', '/cache', '/logs') as $sub) {
         $dir = $settings['data_dir'] . $sub;
         if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
             return "Cannot create $dir";
         }
+    }
+    if (!is_dir(RB_RUN_DIR . '/tmp')) {
+        @mkdir(RB_RUN_DIR . '/tmp', 0755, true);
     }
     return '';
 }

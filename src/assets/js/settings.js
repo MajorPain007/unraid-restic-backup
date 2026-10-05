@@ -27,7 +27,8 @@
                             });
                         }})), {wide: true})),
                     'restic\'s cache, the history of all runs, their logs and the schedule\'s memory. It has to be on a disk: ' +
-                    'the cache can grow to gigabytes, and Unraid keeps /tmp in RAM. A cache pool is ideal.'),
+                    'the cache can grow to gigabytes, and Unraid keeps /tmp in RAM. The system share on a cache pool is ideal: ' +
+                    'like docker.img, nothing in it needs a backup of its own.'),
                 section('Running', 'activity', h('div', {class: 'rb-fields'},
                     RB.field('CPU priority', RB.select(s, 'nice', [[0, 'Normal'], [10, 'Lower (recommended)'], [19, 'Lowest']]),
                              {hint: 'How restic shares the processor with everything else.'}),

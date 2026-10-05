@@ -8,10 +8,15 @@ define('RB_SECRETS_DIR', RB_CONFIG_DIR . '/secrets');
 define('RB_SSH_DIR', RB_CONFIG_DIR . '/ssh');
 define('RB_CONFIG_VERSION', 1);
 
+function rb_default_data_dir()
+{
+    return is_dir('/mnt/user/system') ? '/mnt/user/system/' . RB_NAME : '/mnt/user/appdata/' . RB_NAME;
+}
+
 function rb_default_settings()
 {
     return array(
-        'data_dir'     => '/mnt/user/appdata/' . RB_NAME,
+        'data_dir'     => rb_default_data_dir(),
         'host'         => '',
         'nice'         => 10,
         'io_priority'  => 'low',
@@ -291,7 +296,7 @@ function rb_clean_settings($in, &$errors)
     }
     $dir = rb_abs_path($in['data_dir'] ?? $d['data_dir']);
     if ($dir === '' || !rb_under($dir, '/mnt') || in_array($dir, array('/mnt', '/mnt/user', '/mnt/disks'), true)) {
-        $errors[] = 'Data folder: choose a folder on a disk or pool, such as /mnt/user/appdata/' . RB_NAME;
+        $errors[] = 'Data folder: choose a folder on a disk or pool, such as /mnt/user/system/' . RB_NAME;
         $dir = $d['data_dir'];
     }
     $d['data_dir'] = $dir;

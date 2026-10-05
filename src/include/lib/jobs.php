@@ -20,7 +20,7 @@ function rb_pattern_file(array $patterns)
 
 function rb_own_excludes(array $job, array $repo, array $settings)
 {
-    $own = array($settings['data_dir'] . '/cache', $settings['data_dir'] . '/tmp');
+    $own = array($settings['data_dir'] . '/cache');
     if (($repo['type'] ?? '') === 'local') {
         $own[] = $repo['local']['path'];
     }

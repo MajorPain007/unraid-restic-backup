@@ -19,18 +19,17 @@ $settings = array('data_dir' => '/mnt/user/appdata/restic.backup', 'host' => '')
 t_group("The plugin keeps its own files out of a backup");
 
 t_case('written as the source is: the pool path of a data folder set on the share', function () use ($settings) {
-    t_eq(array('/mnt/cache/appdata/restic.backup/cache', '/mnt/cache/appdata/restic.backup/tmp'),
+    t_eq(array('/mnt/cache/appdata/restic.backup/cache'),
          rb_own_excludes(job(array('/boot', '/mnt/user/Daten', '/mnt/cache/appdata')), repo(), $settings));
 });
 
 t_case('and the share path of a data folder set on the pool', function () {
-    t_eq(array('/mnt/user/appdata/restic.backup/cache', '/mnt/user/appdata/restic.backup/tmp'),
+    t_eq(array('/mnt/user/appdata/restic.backup/cache'),
          rb_own_excludes(job(array('/mnt/user/appdata')), repo(), array('data_dir' => '/mnt/cache/appdata/restic.backup')));
 });
 
 t_case('once for each way a source writes it, and nothing for sources it is not in', function () use ($settings) {
-    t_eq(array('/mnt/user/appdata/restic.backup/cache', '/mnt/cache/appdata/restic.backup/cache',
-               '/mnt/user/appdata/restic.backup/tmp', '/mnt/cache/appdata/restic.backup/tmp'),
+    t_eq(array('/mnt/user/appdata/restic.backup/cache', '/mnt/cache/appdata/restic.backup/cache'),
          rb_own_excludes(job(array('/mnt/user/appdata', '/mnt/cache/appdata', '/mnt/user/Daten')), repo(), $settings));
     t_eq(array(), rb_own_excludes(job(array('/mnt/user/Daten', '/mnt/cache/appdata/plex', '/mnt/disks/usb')), repo(), $settings));
 });
@@ -47,7 +46,7 @@ t_case('the backup gets them in its exclude file', function () use ($settings) {
     $tmp = t_tmpdir() . '/op';
     $args = rb_backup_args(job(array('/mnt/cache/appdata'), array('excludes' => array('*.tmp'))), repo(), $settings, $tmp);
     t_true(in_array("$tmp.exclude", $args, true), 'the exclude file is passed');
-    t_eq("*.tmp\n.zfs/snapshot\n/mnt/cache/appdata/restic.backup/cache\n/mnt/cache/appdata/restic.backup/tmp\n",
+    t_eq("*.tmp\n.zfs/snapshot\n/mnt/cache/appdata/restic.backup/cache\n",
          file_get_contents("$tmp.exclude"));
 });
 

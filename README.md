@@ -9,7 +9,7 @@ server - set up, scheduled and restored from the Unraid web interface.
 
 | | |
 |---|---|
-| **Repositories** | A folder on a local disk or pool, an SFTP server (another Unraid, a NAS, a Hetzner Storage Box, any Linux server), or a REST server. SFTP logs in with an SSH key the plugin makes; no passwords are stored for it. |
+| **Repositories** | A folder on a local disk or pool, an SFTP server (another Unraid, a NAS, a Hetzner Storage Box, any Linux server), or a REST server. SFTP logs in with an SSH key the plugin makes; no passwords are stored for it. Repository passwords and keys can be kept encrypted on the flash drive, unlocked with the array or a master password. |
 | **Jobs** | Folders, exclusions, a schedule and a retention policy per job. A run missed while the server was off happens when it is back. |
 | **Data in use** | Per job: back up as it is, from a ZFS snapshot, from a ZFS snapshot with the containers and VMs using the data stopped for a moment, or with them stopped for the whole backup. |
 | **Restore** | Browse every snapshot, restore files and folders in place or into another folder, download them, search across snapshots, compare two. |

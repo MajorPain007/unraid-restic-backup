@@ -142,6 +142,12 @@
                   'Reinstalling the plugin registers it with cron again.'
                 : 'The scheduler has not run yet. If this stays, scheduled backups will not start - reinstalling the plugin registers it with cron again.');
         }
+        var sec = sys.secrets || {};
+        if (sec.locked) {
+            banners.appendChild(unlockBox());
+        } else if (sec.problem) {
+            note('err', 'lock', sec.problem);
+        }
         if (sys.array_started && !sys.data_dir_ok && o.config.jobs.length) {
             note('warn', 'folder', 'The data folder ' + o.config.settings.data_dir +
                  ' does not exist yet. It is created with the first backup; if it is on a disk that is gone, choose another in Settings.');
@@ -175,6 +181,35 @@
             render();
         }
     });
+
+    var unlockEl = null;
+
+    function unlockBox() {
+        if (unlockEl) {
+            return unlockEl;
+        }
+        var pw = h('input', {type: 'password', placeholder: 'Master password', autocomplete: 'current-password',
+                             style: {width: '220px', margin: 0}});
+        var btn;
+        var unlock = function () {
+            RB.busy(btn, RB.api('secrets_unlock', {password: pw.value})).then(function () {
+                unlockEl = null;
+                RB.toast('Unlocked. Scheduled backups run again.');
+                RB.refresh();
+            }).catch(RB.fail);
+        };
+        pw.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                unlock();
+            }
+        });
+        btn = RB.button('Unlock', {kind: 'primary', small: true, icon: 'unlock', onclick: unlock});
+        unlockEl = h('div', {class: 'rb-card-note warn', style: {marginTop: 0, marginBottom: '14px'}},
+            RB.icon('lock'), h('div', {style: {flex: 1}},
+                h('div', {text: 'The repository passwords are locked since the server started. Backups wait until you enter the master password.'}),
+                h('div', {class: 'rb-inline', style: {marginTop: '8px'}}, pw, btn)));
+        return unlockEl;
+    }
 
     function render() {
         if (!RB.state.overview) {

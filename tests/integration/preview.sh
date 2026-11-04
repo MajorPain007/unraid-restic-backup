@@ -2,7 +2,6 @@
 
 source "$(dirname "$0")/lib.sh"
 
-API="php $ROOT/tests/integration/api.php"
 get() { php -r '$v = json_decode($argv[1], true); foreach (explode(".", $argv[2]) as $k) { $v = is_array($v) ? ($v[$k] ?? null) : null; } echo is_scalar($v) ? (is_bool($v) ? ($v ? "true" : "false") : $v) : json_encode($v, JSON_UNESCAPED_SLASHES);' "$1" "$2"; }
 has() { get "$r" preview | grep -qF "\"$S/$1\""; }
 rule() { php -r 'foreach (json_decode($argv[1], true)["rules"] as $r) { if ($r["label"] === $argv[2]) { echo $r[$argv[3]]; } }' "$r" "$1" "$2"; }
@@ -29,7 +28,7 @@ JOB=$(php -r 'echo json_encode(array("id" => "j00000009", "name" => "Preview", "
     "iexcludes" => array("*.JPG"), "exclude_caches" => true, "exclude_larger_than" => "1M"), JSON_UNESCAPED_SLASHES);' "$S")
 
 group "The preview counts what restic would back up"
-r=$(php "$ROOT/tests/integration/preview_compare.php" "$JOB" "$M/pvrepo")
+r=$($RB test-preview-compare "$JOB" "$M/pvrepo")
 check "restic's dry run worked" '[ "$(get "$r" restic_exit)" = 0 ] && [ "$(get "$r" restic)" != "[]" ]' "$r"
 check "the same files, one by one" '[ "$(get "$r" preview)" = "$(get "$r" restic)" ]' \
     "$(diff <(get "$r" preview | tr , "\n") <(get "$r" restic | tr , "\n") | grep "^[<>]")"
@@ -62,20 +61,16 @@ r=$($API job_preview '{"job":{"name":"x","sources":[]}}')
 check "a job without folders gets no preview" '[ "$(get "$r" ok)" = false ]' "$r"
 
 group "Folder by folder, the same verdicts"
-tree=$(php -r '
-require $argv[1];
-$job = $argv[2];
-$walk = function ($path) use (&$walk, $job) {
-    $r = rb_api_dispatch("job_tree", array("job" => $job, "path" => $path));
-    foreach ($r["entries"] ?? array() as $e) {
-        if ($e["open"]) {
-            $walk($e["path"]);
-        } elseif ($e["type"] === "file" && $e["out"] === null) {
-            echo $e["path"], "\n";
-        }
-    }
-};
-$walk("");' "$ROOT/src/include/lib/api.php" "$JOB" | sort)
+walk() {
+    local r
+    r=$($API job_tree "$(php -r 'echo json_encode(array("job" => json_decode($argv[1], true), "path" => $argv[2]), JSON_UNESCAPED_SLASHES);' "$JOB" "$1")")
+    php -r 'foreach (json_decode($argv[1], true)["entries"] ?? array() as $e) {
+        if ($e["open"]) { echo "D\t", $e["path"], "\n"; } elseif ($e["type"] === "file" && $e["out"] === null) { echo "F\t", $e["path"], "\n"; } }' "$r" |
+    while IFS=$'\t' read -r t p; do
+        if [ "$t" = D ]; then walk "$p"; else echo "$p"; fi
+    done
+}
+tree=$(walk "" | sort)
 want=$(php -r 'foreach (json_decode($argv[1], true) as $f) { echo $f, "\n"; }' "$(get "$cmp" restic)" | sort)
 check "the files marked as backed up are the files restic reads" '[ -n "$tree" ] && [ "$tree" = "$want" ]' \
     "$(diff <(echo "$want") <(echo "$tree") | grep "^[<>]")"

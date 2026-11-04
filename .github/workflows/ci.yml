@@ -9,15 +9,14 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        php: ['8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php }}
+          php-version: '8.3'
           coverage: none
           tools: none
       - name: Unit tests, static checks, syntax
@@ -31,6 +30,9 @@ jobs:
       REST_SERVER_VERSION: 0.14.0
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -62,9 +64,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
       - name: Build
         run: |
           RB_OUT_DIR=dist RB_SKIP_PLG=1 ./scripts/build.sh 2026.01.01.01
-          tar -tJf dist/restic.backup-2026.01.01.01-x86_64-1.txz | grep -q 'usr/local/emhttp/plugins/restic.backup/scripts/scheduler.php'
+          tar -tJf dist/restic.backup-2026.01.01.01-x86_64-1.txz | grep -q 'usr/local/emhttp/plugins/restic.backup/bin/restic-backup'
+          mkdir x && tar -C x -xJf dist/restic.backup-2026.01.01.01-x86_64-1.txz && file x/usr/local/emhttp/plugins/restic.backup/bin/restic-backup | grep -q 'x86-64.*statically linked'
+          rm -rf x
       - name: A test build changes nothing tracked
         run: git diff --exit-code

@@ -5,6 +5,18 @@ cd "$ROOT" || exit 1
 fail=0
 section() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
+section "Go"
+GO=$(command -v go || echo /usr/local/go/bin/go)
+unformatted=$(gofmt -l cmd internal)
+if [ -n "$unformatted" ]; then
+    echo "  FAIL not gofmt-formatted: $unformatted"
+    fail=1
+else
+    echo "  PASS gofmt"
+fi
+GOOS=linux "$GO" vet ./... || fail=1
+"$GO" test ./internal/rb/ -count=1 || fail=1
+
 section "PHP syntax"
 n=0
 while IFS= read -r f; do
@@ -13,14 +25,7 @@ while IFS= read -r f; do
 done < <(find src tests -name '*.php' -o -name '*.page')
 echo "  $n files"
 
-for t in tests/php/*_test.php; do
-    section "$(basename "$t" .php)"
-    php "$t" | grep -v '^$' | grep -v '^\s*\x1b\[1m' || true
-    php "$t" >/dev/null 2>&1 || fail=1
-done
-
 section "Static checks"
-php tests/php/static_check.php || fail=1
 node tests/js_check.js || fail=1
 
 section "Pages and manifest"

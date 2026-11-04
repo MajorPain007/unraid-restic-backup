@@ -2,12 +2,10 @@
 
 source "$(dirname "$0")/lib.sh"
 
-API="php $ROOT/tests/integration/api.php"
 call() { $API "$@"; }
 get() { php -r '$v = json_decode($argv[1], true); foreach (explode(".", $argv[2]) as $k) { $v = is_array($v) ? ($v[$k] ?? null) : null; } echo is_scalar($v) ? (is_bool($v) ? ($v ? "true" : "false") : $v) : json_encode($v, JSON_UNESCAPED_SLASHES);' "$1" "$2"; }
-LIB="$ROOT/src/include/lib/browse.php"
-mounted() { php -r 'require $argv[1]; exit(rb_browse_mounted($argv[2]) ? 0 : 1);' "$LIB" "$T/run/browse/$RID"; }
-running() { php -r 'require $argv[1]; exit(rb_browse_running($argv[2]) ? 0 : 1);' "$LIB" "$RID"; }
+mounted() { $RB test-browse mounted "$T/run/browse/$RID"; }
+running() { $RB test-browse running "$RID"; }
 status()  { get "$(cat "$T/run/browse/$RID.json" 2>/dev/null || echo '{}')" "$1"; }
 until_()  { for _ in $(seq 1 150); do eval "$1" && return 0; sleep 0.2; done; return 1; }
 list() {
@@ -88,15 +86,19 @@ NEWSNAP=$(get "$(call snapshots "{\"repo\":\"$RID\",\"refresh\":true}")" snapsho
 check "the next folder starts it again, with the new snapshot in it" \
     '[ "$NEWSNAP" != "$SNAP" ] && [ "$(entries "$NEWSNAP" "$S/dir/sub" | grep -c deep.txt)" = 1 ] && [ "$(status status)" = ready ]'
 
-php "$ROOT/src/scripts/stop_all.php" 10
+$RB stop-all 10
 check "stopping everything ends it" '! running && ! mounted && [ ! -e "$T/run/browse/$RID.json" ]'
+nocache
+dl=$(echo "{\"repo\":\"$RID\",\"snapshot\":\"$SNAP\",\"path\":\"$S/dir/b.bin\"}" | $RB download | cmp - "$S/dir/b.bin" && echo same)
+check "a download right away, while the mount is still starting, waits for it" '[ "$dl" = same ]' "$dl"
+$RB stop-all 10
 
 nocache
 entries "$SNAP" "$S" >/dev/null
 restic_pid=$(status restic)
 kill -9 "$(status pid)"
 check "a killed server leaves restic and the mount behind..." 'kill -0 $restic_pid 2>/dev/null && mounted'
-php -r 'require $argv[1]; rb_browse_reap();' "$LIB"
+$RB test-browse reap
 check "...which the scheduler cleans up" 'until_ "! kill -0 $restic_pid 2>/dev/null" && ! mounted && [ ! -e "$T/run/browse/$RID.json" ]'
 
 nocache

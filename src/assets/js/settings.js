@@ -3,6 +3,7 @@
     var h = RB.h;
 
     RB.views.settings = {
+        keep: true,
         render: function (container) {
             var o = RB.state.overview;
             var s = JSON.parse(JSON.stringify(o.config.settings));
@@ -60,6 +61,7 @@
                       });
                   }})));
             container.appendChild(form);
+            container.appendChild(secretsCard());
 
             var sys = o.system;
             container.appendChild(h('div', {class: 'rb-card', style: {maxWidth: '860px', marginTop: '16px'}},
@@ -71,6 +73,74 @@
                     fact('Array', sys.array_started ? 'Started' : 'Stopped')))));
         }
     };
+
+    function secretsCard() {
+        var body = h('div', null, h('div', {class: 'rb-hint'}, RB.icon('loader', 'rb-spin'), ' Loading...'));
+        var card = h('div', {class: 'rb-card', style: {maxWidth: '860px', marginTop: '16px'}},
+            h('div', {class: 'rb-form-section'}, h('h3', null, RB.icon('lock'), 'Passwords on the flash drive'),
+              h('div', {class: 'rb-hint', style: {marginBottom: '14px'}},
+                'The repository passwords and SSH keys are kept on the flash drive. Encrypted, someone who has only the flash ' +
+                'drive - or the whole server switched off - cannot read them.'),
+              body));
+        RB.api('secrets_status', {}).then(function (st) {
+            var choice = {mode: st.mode};
+            var pw = {password: '', password_repeat: '', current_password: ''};
+            var errorSlot = h('div');
+            var detail = h('div', {style: {marginTop: '14px'}});
+            function renderDetail() {
+                RB.clear(detail);
+                if (choice.mode === 'key' && !st.key_possible) {
+                    detail.appendChild(h('div', {class: 'rb-card-note warn', style: {marginTop: 0}}, RB.icon('alert'),
+                        h('div', {text: 'The data folder is not on encrypted storage (' + st.key_impossible + '). A key kept there would ' +
+                                        'protect nothing: anyone with the disks could read it. Encrypt the pool, or use a master password.'})));
+                } else if (choice.mode === 'key') {
+                    detail.appendChild(h('div', {class: 'rb-hint', text: 'The key is kept hidden in the data folder (' + st.key_file +
+                        '), on encrypted storage. Unlocking the array unlocks the passwords; nothing else to enter. Keep the repository ' +
+                        'passwords somewhere safe as well: without the key they cannot be read from the flash drive.'}));
+                }
+                if (choice.mode === 'master') {
+                    detail.appendChild(h('div', {class: 'rb-fields'},
+                        RB.field('Master password', RB.input(pw, 'password', {type: 'password'}),
+                                 {hint: 'At least 8 characters. Entered after every start of the server; until then backups wait and a notification asks for it.'}),
+                        RB.field('Repeat it', RB.input(pw, 'password_repeat', {type: 'password'}))));
+                }
+                if (st.mode === 'master' && (choice.mode !== 'master' || pw.password)) {
+                    detail.appendChild(h('div', {class: 'rb-fields', style: {marginTop: '10px'}},
+                        RB.field('Current master password', RB.input(pw, 'current_password', {type: 'password'}))));
+                }
+            }
+            var cards = RB.optionCards(st.mode, [
+                {value: 'plain', title: 'Readable', icon: 'unlock',
+                 text: 'As restic needs them. Right for servers without disk encryption, where encrypting them would protect nothing.'},
+                {value: 'key', title: 'Encrypted, unlocked with the array', icon: 'shield',
+                 text: 'The key lies on the encrypted pool. Unlocking the array unlocks the passwords too.'},
+                {value: 'master', title: 'Encrypted with a master password', icon: 'lock',
+                 text: 'Entered after every start of the server. Works without disk encryption.'}
+            ], function (v) { choice.mode = v; renderDetail(); });
+            renderDetail();
+            RB.clear(body).appendChild(h('div', null, errorSlot, cards, detail,
+                h('div', {class: 'rb-inline', style: {marginTop: '14px'}},
+                  RB.button('Apply', {kind: 'primary', icon: 'check', onclick: function (e) {
+                      RB.busy(e.currentTarget, RB.api('secrets_mode', {mode: choice.mode, password: pw.password,
+                          password_repeat: pw.password_repeat, current_password: pw.current_password})).then(function () {
+                          RB.toast('The passwords are kept the new way.');
+                          card.replaceWith(secretsCard());
+                          RB.refresh();
+                      }).catch(function (err) {
+                          RB.clear(errorSlot).appendChild(RB.errorBox(err));
+                      });
+                  }}),
+                  st.mode === 'master' && !st.locked ? RB.button('Lock now', {icon: 'lock', onclick: function (e) {
+                      RB.busy(e.currentTarget, RB.api('secrets_lock', {})).then(function () {
+                          card.replaceWith(secretsCard());
+                          RB.refresh();
+                      }).catch(RB.fail);
+                  }}) : null)));
+        }).catch(function (err) {
+            RB.clear(body).appendChild(RB.errorBox(err));
+        });
+        return card;
+    }
 
     function fact(label, value) {
         return h('div', {class: 'rb-fact'}, h('div', {class: 'rb-label', text: label}), h('div', {class: 'rb-value', text: value}));

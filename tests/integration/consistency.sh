@@ -8,7 +8,8 @@ done
 docker image inspect busybox >/dev/null 2>&1 || docker pull -q busybox >/dev/null || { echo "cannot pull busybox"; exit 2; }
 
 POOL=rbtpool
-API="php $ROOT/tests/integration/api.php"
+rbapi() { $RB api "$@" </dev/null; }
+API=rbapi
 get() { php -r '$v = json_decode($argv[1], true); foreach (explode(".", $argv[2]) as $k) { $v = is_array($v) ? ($v[$k] ?? null) : null; } echo is_scalar($v) ? (is_bool($v) ? ($v ? "true" : "false") : $v) : json_encode($v, JSON_UNESCAPED_SLASHES);' "$1" "$2"; }
 running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" = true ]; }
 

@@ -4,7 +4,12 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 T=/var/tmp/rbdemo
 M=/mnt/rbdemo
 export RB_CONFIG_DIR=$T/config RB_RUN_DIR=$T/run RB_RESTIC=$(command -v restic) RB_VAR_INI=$T/var.ini RB_NOTIFY=/bin/true
-CFG="php $ROOT/tests/integration/cfg.php"
+GO=$(command -v go || echo /usr/local/go/bin/go)
+export RB_BIN=/var/tmp/rbdemo-bin/restic-backup
+mkdir -p "$(dirname "$RB_BIN")"
+( cd "$ROOT" && "$GO" build -o "$RB_BIN" ./cmd/restic-backup ) || exit 1
+RB="$RB_BIN"
+CFG="$RB test-cfg"
 
 pkill -f "router.php" 2>/dev/null
 pkill -f "rest-server --path $T/rest" 2>/dev/null
@@ -61,14 +66,14 @@ for d in 13 11 9 7 5 3 2 1; do
     echo "change $d" >> "$M/user/appdata/nextcloud/config/config.php"
     restic -r "$M/disks/backup/restic" backup --host tower --tag job:j00000001 --time "$when" "$M/user/appdata" >/dev/null
 done
-php "$ROOT/src/scripts/run.php" backup j00000001 manual
-php "$ROOT/src/scripts/run.php" backup j00000002 manual
-php "$ROOT/src/scripts/run.php" backup j00000003 manual
+"$RB" run backup j00000001 manual
+"$RB" run backup j00000002 manual
+"$RB" run backup j00000003 manual
 echo "two" > "$M/user/documents/new file.txt"
-php "$ROOT/src/scripts/run.php" backup j00000002 manual
-php "$ROOT/src/scripts/run.php" check r00000001 manual
+"$RB" run backup j00000002 manual
+"$RB" run check r00000001 manual
 kill $(pgrep -f "rest-server --path $T/rest") 2>/dev/null; sleep 0.3
-php "$ROOT/src/scripts/run.php" backup j00000003 manual
+"$RB" run backup j00000003 manual
 (rest-server --path "$T/rest" --listen 127.0.0.1:18001 --no-auth >/dev/null 2>&1 &)
 
 php -r '
@@ -91,7 +96,7 @@ file_put_contents($f, implode("\n", $lines) . "\n" . $old);
 ' "$M/user/appdata/restic.backup/history.jsonl"
 
 cd "$ROOT"
-nohup env RB_CONFIG_DIR=$RB_CONFIG_DIR RB_RUN_DIR=$RB_RUN_DIR RB_RESTIC=$RB_RESTIC RB_VAR_INI=$RB_VAR_INI RB_NOTIFY=/bin/true \
+nohup env RB_BIN=$RB_BIN RB_CONFIG_DIR=$RB_CONFIG_DIR RB_RUN_DIR=$RB_RUN_DIR RB_RESTIC=$RB_RESTIC RB_VAR_INI=$RB_VAR_INI RB_NOTIFY=/bin/true \
     php -S 127.0.0.1:8088 tests/harness/router.php > "$T/server.log" 2>&1 &
 sleep 0.5
 echo "harness on http://127.0.0.1:8088"

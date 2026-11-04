@@ -146,5 +146,51 @@ $CFG job "{\"id\":\"j00000005\",\"name\":\"REST\",\"repo\":\"r00000004\",\"sourc
 $RUN backup j00000005 manual
 check "a backup to a REST server succeeds" '[ "$(op_field status)" = success ]' "$(op_field error)"
 
+group "Signals and the array stop"
+head -c 400000000 /dev/urandom > "$M/src/sub/huge.bin"
+$CFG repo "{\"id\":\"r00000001\",\"name\":\"Disk\",\"type\":\"local\",\"local\":{\"path\":\"$M/repo\"},\"options\":{\"limit_upload\":20000}}"
+mark
+$RUN backup j00000001 manual &
+RPID=$!
+wait_phase "Backing up"
+kill -TERM $RPID
+wait $RPID
+check "SIGTERM to the runner stops the backup like Stop does" '[ "$(op_field status)" = cancelled ]' "$(op_field status) $(op_field error)"
+mkdir -p "$T/run/secrets"; echo copy > "$T/run/secrets/r00000001.password"
+mark
+$RUN backup j00000001 manual &
+RPID=$!
+wait_phase "Backing up"
+$RB stop-all 30
+check "stop-all ends a running backup" '[ "$(op_field status)" = cancelled ] && ! pgrep -f "restic-backup run " >/dev/null' "$(op_field status)"
+check "...and removes the decrypted copies from RAM" '[ ! -e $T/run/secrets/r00000001.password ]'
+wait $RPID 2>/dev/null
+rm -f "$M/src/sub/huge.bin"
+$CFG repo "{\"id\":\"r00000001\",\"name\":\"Disk\",\"type\":\"local\",\"local\":{\"path\":\"$M/repo\"}}"
+
+group "The master password"
+r=$($API secrets_mode '{"mode":"master","password":"correct horse battery","password_repeat":"correct horse battery"}' </dev/null)
+check "master mode is set" 'echo "$r" | grep -q "\"ok\": *true"' "$r"
+$API secrets_lock '{}' </dev/null >/dev/null
+$RUN backup j00000001 manual
+check "a locked run fails before restic, and says why" \
+    '[ "$(op_field status)" = error ] && op_field error | grep -q "master password" && ! grep -qF "\$ restic" "$(op_field log)"' "$(op_field error)"
+php -r '$f=$argv[1]; $s=json_decode(file_get_contents($f), true); $s["jobs"]["j00000001"]["sched"]["slot"] -= 3600; file_put_contents($f, json_encode($s));' "$M/data/state.json"
+n3=$(ls "$T/run/ops/" | grep -c json)
+: > $T/notifications
+$SCHED; $SCHED; wait_ops; sleep 0.5
+check "the scheduler starts nothing while locked" '[ "$(ls $T/run/ops/ | grep -c json)" = "$n3" ]'
+check "...and says once that it waits for the master password" '[ "$(grep -c "waiting for the master password" $T/notifications)" = 1 ]' "$(cat $T/notifications)"
+$API secrets_unlock '{"password":"correct horse battery"}' </dev/null >/dev/null
+$SCHED; wait_ops
+check "unlocked, the missed slot runs" '[ "$(ls $T/run/ops/ | grep -c json)" -gt "$n3" ] && [ "$(op_field status)" = success ]' "$(op_field error)"
+$API secrets_lock '{}' </dev/null >/dev/null
+: > $T/notifications
+$RB event array-started
+sleep 0.5
+check "the array start says it right away when locked" 'grep -q "waiting for the master password" $T/notifications'
+$API secrets_unlock '{"password":"correct horse battery"}' </dev/null >/dev/null
+$API secrets_mode '{"mode":"plain","current_password":"correct horse battery"}' </dev/null >/dev/null
+
 printf '\n\033[1mResult:\033[0m %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

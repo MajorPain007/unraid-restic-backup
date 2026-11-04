@@ -12,16 +12,16 @@ for t in restic rest-server sshd php ssh-keygen; do
     command -v "$t" >/dev/null || [ -x "/usr/sbin/$t" ] || { echo "missing $t"; exit 2; }
 done
 
-T=/var/tmp/rbtest
-M=/mnt/rbtest
+T=${RB_TEST_DIR:-/var/tmp/rbtest}
+M=${RB_TEST_MNT:-/mnt/rbtest}
 export RB_CONFIG_DIR=$T/config RB_RUN_DIR=$T/run RB_RESTIC=$(command -v restic) RB_VAR_INI=$T/var.ini
 export RB_NOTIFY=$T/notify
 REST_PID=
 
 cleanup() {
     [ -n "$REST_PID" ] && kill "$REST_PID" 2>/dev/null
-    pkill -f "$ROOT/src/scripts/run.php" 2>/dev/null
-    pkill -9 -f "src/scripts/browse[.]php" 2>/dev/null
+    pkill -f "$T/bin/restic-backup run " 2>/dev/null
+    pkill -9 -f "$T/bin/restic-backup browse " 2>/dev/null
     pkill -9 -f "restic.* mount --no-lock $T" 2>/dev/null
     for m in "$T"/run/browse/*; do
         mountpoint -q "$m" 2>/dev/null && umount -l "$m"
@@ -51,15 +51,21 @@ echo hello > "$M/src/docs/a.txt"
 head -c 20000000 /dev/urandom > "$M/src/sub/big.bin"
 echo junk > "$M/src/sub/x.tmp"
 
-CFG="php $ROOT/tests/integration/cfg.php"
-RUN="php $ROOT/src/scripts/run.php"
-SCHED="php $ROOT/src/scripts/scheduler.php"
+GO=$(command -v go || echo /usr/local/go/bin/go)
+export RB_BIN="$T/bin/restic-backup"
+mkdir -p "$T/bin"
+( cd "$ROOT" && "$GO" build -o "$RB_BIN" ./cmd/restic-backup ) || { echo "build failed"; exit 2; }
+RB="$RB_BIN"
+API="$RB api"
+CFG="$RB test-cfg"
+RUN="$RB run"
+SCHED="$RB tick"
 export RESTIC_PASSWORD=test-password
 
 last_op()   { ls -t "$T/run/ops/"*.json 2>/dev/null | head -1; }
 op_field()  { php -r '$o = json_decode(file_get_contents($argv[1]), true); $v = $o; foreach (explode(".", $argv[2]) as $k) { $v = $v[$k] ?? null; } echo is_scalar($v) ? $v : json_encode($v);' "$(last_op)" "$1"; }
 snapcount() { restic -r "$1" snapshots --json 2>/dev/null | php -r 'echo count(json_decode(stream_get_contents(STDIN), true) ?: []);'; }
-wait_ops()  { for _ in $(seq 1 600); do pgrep -f "$ROOT/src/scripts/run.php" >/dev/null || return 0; sleep 0.1; done; return 1; }
+wait_ops()  { for _ in $(seq 1 600); do pgrep -f "$T/bin/restic-backup run " >/dev/null || return 0; sleep 0.1; done; return 1; }
 mark()       { touch "$T/mark"; sleep 0.05; }
 new_op()     { find "$T/run/ops" -name '*.json' -newer "$T/mark" 2>/dev/null | head -1; }
 wait_phase() {

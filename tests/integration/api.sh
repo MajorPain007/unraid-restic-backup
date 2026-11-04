@@ -2,7 +2,6 @@
 
 source "$(dirname "$0")/lib.sh"
 
-API="php $ROOT/tests/integration/api.php"
 export RB_BROWSE=off
 call() { $API "$@"; }
 get() { php -r '$v = json_decode($argv[1], true); foreach (explode(".", $argv[2]) as $k) { $v = is_array($v) ? ($v[$k] ?? null) : null; } echo is_scalar($v) ? (is_bool($v) ? ($v ? "true" : "false") : $v) : json_encode($v, JSON_UNESCAPED_SLASHES);' "$1" "$2"; }
@@ -103,11 +102,17 @@ r=$(call restore_start "{\"repo\":\"$RID\",\"snapshot\":\"$OLD\",\"items\":[\"$M
 check "a restore into RAM is refused" '! okay "$r"' "$r"
 
 group "Downloads"
-php -r '$_SERVER["REQUEST_METHOD"] = "POST"; $_POST = array("action" => "download", "repo" => $argv[1], "snapshot" => $argv[2], "path" => $argv[3]); include $argv[4];' \
-    "$RID" "$NEW" "$M/src2/photos/p1.jpg" "$ROOT/src/include/api.php" > "$T/dl.bin" 2>/dev/null
+dl() { echo "{\"repo\":\"$RID\",\"snapshot\":\"$NEW\",\"path\":\"$1\"}" | $RB "$2"; }
+r=$(dl "$M/src2/photos/p1.jpg" download-info)
+check "a download is described first: name and size" \
+    'okay "$r" && [ "$(get "$r" name)" = p1.jpg ] && [ "$(get "$r" dir)" = false ] && [ "$(get "$r" size)" = 300000 ]' "$r"
+r=$(dl "$M/src2/nothing" download-info)
+check "...and one that is not in the snapshot is refused" '! okay "$r" && get "$r" error | grep -q "not in the snapshot"' "$r"
+dl "$M/src2/photos/p1.jpg" download > "$T/dl.bin" 2>/dev/null
 check "a file downloads as it is" 'cmp -s "$T/dl.bin" "$M/src2/photos/p1.jpg"'
-php -r '$_SERVER["REQUEST_METHOD"] = "POST"; $_POST = array("action" => "download", "repo" => $argv[1], "snapshot" => $argv[2], "path" => $argv[3]); include $argv[4];' \
-    "$RID" "$NEW" "$M/src2/photos" "$ROOT/src/include/api.php" > "$T/dl.zip" 2>/dev/null
+r=$(dl "$M/src2/photos" download-info)
+check "a folder is described as a zip" '[ "$(get "$r" name)" = photos.zip ] && [ "$(get "$r" dir)" = true ]' "$r"
+dl "$M/src2/photos" download > "$T/dl.zip" 2>/dev/null
 check "a folder downloads as a zip" 'python3 -c "import sys, zipfile; sys.exit(0 if any(n.endswith(\"p1.jpg\") for n in zipfile.ZipFile(sys.argv[1]).namelist()) else 1)" "$T/dl.zip"'
 
 group "Repository care"

@@ -2,8 +2,8 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "restic.backup">
 <!ENTITY author    "MajorPain007">
-<!ENTITY version   "2026.10.05.02">
-<!ENTITY md5       "6160ea66cdc7405827f877faa52beddc">
+<!ENTITY version   "2026.11.04.01">
+<!ENTITY md5       "162561892f6e8fc29edcdd84de2a31fc">
 <!ENTITY launch    "Settings/ResticBackup">
 <!ENTITY github    "MajorPain007/unraid-restic-backup">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/src/&name;.plg">
@@ -21,6 +21,26 @@
         icon="history">
 
 <CHANGES>
+## Version 2026.11.04.01 - Rewritten in Go
+
+- The plugin is now one program written in Go instead of PHP scripts. It
+  looks and works as before; settings, history, schedules and running
+  state carry over unchanged.
+- Repository passwords and SSH keys can be kept encrypted on the flash
+  drive, in Settings: unlocked together with the array, with the key kept
+  hidden in the data folder on encrypted storage; or with a master password
+  entered after every start of the server. While it is not entered,
+  scheduled backups wait and a notification asks for it; missed backups
+  run once it is.
+- What gets backed up follows restic's own pattern rules exactly: patterns
+  with [!...] and case-insensitive patterns with letters such as umlauts
+  were shown wrongly before.
+- Downloading from a snapshot right after opening it no longer fails while
+  browsing gets ready.
+- Settings being edited are no longer reset when the page refreshes itself.
+- A backup that is ended by a signal, such as when the array stops, still
+  starts what it stopped and removes its ZFS snapshots.
+
 ## Version 2026.10.05.02 - Data folder in the system share
 
 - New installations keep their data folder - restic's cache, the history
@@ -250,14 +270,14 @@ for d in secrets ssh; do
   [ -f &configDir;/$d/.gitignore ] || echo '*' &gt; &configDir;/$d/.gitignore
 done
 
-CRON='* * * * * /usr/bin/php &pluginDir;/scripts/scheduler.php &gt;/dev/null 2&gt;&amp;1'
+CRON='* * * * * &pluginDir;/bin/restic-backup tick &gt;/dev/null 2&gt;&amp;1'
 [ "$(cat &configDir;/&name;.cron 2&gt;/dev/null)" = "$CRON" ] || echo "$CRON" &gt; &configDir;/&name;.cron
 START=$(date +%s)
 ( for i in $(seq 1 90); do
     sleep 2
     L=/var/log/plugins/&name;.plg
     { [ -L "$L" ] || [ -e "$L" ]; } &amp;&amp; [ "$(stat -c %Y "$L")" -ge "$START" ] || continue
-    crontab -c /etc/cron.d -l 2&gt;/dev/null | grep -qF '&pluginDir;/scripts/scheduler.php' &amp;&amp; break
+    crontab -c /etc/cron.d -l 2&gt;/dev/null | grep -qF '&pluginDir;/bin/restic-backup tick' &amp;&amp; break
     /usr/local/sbin/update_cron
   done ) &gt;/dev/null 2&gt;&amp;1 &lt;/dev/null &amp;
 
@@ -269,6 +289,7 @@ echo "Restic Backup is installed: Settings, Utilities, Restic Backup."
 
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
+[ -x &pluginDir;/bin/restic-backup ] &amp;&amp; &pluginDir;/bin/restic-backup stop-all 60
 [ -f &pluginDir;/scripts/stop_all.php ] &amp;&amp; /usr/bin/php &pluginDir;/scripts/stop_all.php 60
 rm -f &configDir;/&name;.cron
 command -v update_cron &gt;/dev/null 2&gt;&amp;1 &amp;&amp; update_cron &gt;/dev/null 2&gt;&amp;1

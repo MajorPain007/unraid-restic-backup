@@ -125,7 +125,7 @@
   <div class="rb-tabs" role="tablist">
     {#each TABS as [id, label, icon] (id)}
       <button type="button" role="tab" class="rb-tab" class:active={app.tab === id} aria-selected={app.tab === id} onclick={() => show(id)}>
-        <Icon name={icon} />{label}
+        <Icon name={icon} /><span class="rb-tab-label">{label}</span>
         {#if counts[id]}<span class="rb-count" class:err={id === 'jobs' && counts.failed}>{counts[id]}</span>{/if}
       </button>
     {/each}

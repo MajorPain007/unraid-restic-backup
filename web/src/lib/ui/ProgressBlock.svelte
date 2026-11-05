@@ -11,7 +11,9 @@
 
   let live = $derived(app.overview?.running.find((r) => r.id === op.id) ?? op);
   let p = $derived(live.progress as Record<string, any> | null | undefined);
-  let known = $derived(!!p && !!(p.total_bytes || p.percent));
+  let known = $derived(!!p && p.percent !== null && p.percent !== undefined && !!(p.total_bytes || p.percent));
+  let counting = $derived(!!p?.counting);
+  let estimate = $derived(!!p?.estimate);
   let pct = $derived(known ? Math.max(0, Math.min(1, p!.percent || 0)) : 0);
   let rate = $state<number | null>(null);
   let tick = $state(now());
@@ -43,17 +45,22 @@
   let detail = $derived.by(() => {
     if (!known || !p) return '';
     const parts: string[] = [];
-    if (p.total_bytes) parts.push(bytes(p.bytes_done) + ' of ' + bytes(p.total_bytes));
-    if (p.total_files) parts.push(count(p.files_done) + ' of ' + count(p.total_files) + ' files');
+    const of = estimate ? ' of about ' : ' of ';
+    if (p.total_bytes) parts.push(bytes(p.bytes_done) + of + bytes(p.total_bytes));
+    if (p.total_files) parts.push(count(p.files_done) + of + count(p.total_files) + ' files');
+    if (counting) parts.push('still counting');
     return '  ' + live.phase + (parts.length ? ' · ' + parts.join(' · ') : '');
   });
 
   let right = $derived.by(() => {
-    if (!known || !p) return duration(tick - live.started);
+    if (!known || !p) {
+      if (counting && p) return bytes(p.bytes_done) + ' so far · ' + count(p.total_files) + ' files counted';
+      return duration(tick - live.started);
+    }
     const bits: string[] = [];
     if (rate) bits.push(bytes(rate) + '/s');
     const eta = p.eta !== null && p.eta !== undefined ? p.eta : rate && p.total_bytes ? (p.total_bytes - p.bytes_done) / rate : null;
-    if (eta !== null && pct > 0.01) bits.push(duration(eta) + ' left');
+    if (eta !== null && pct > 0.01 && !counting) bits.push(duration(eta) + ' left');
     if (p.errors) bits.push(plural(p.errors, 'error'));
     return bits.join(' · ');
   });
@@ -73,9 +80,9 @@
   </div>
   <div class="rb-progress-text">
     {#if known}
-      <span><b>{Math.floor(pct * 100)}%</b>{detail}</span>
+      <span title={estimate ? 'restic is still counting the files. Until it is done, the total is taken from the last backup.' : null}><b>{estimate ? '~' : ''}{Math.floor(pct * 100)}%</b>{detail}</span>
     {:else}
-      <span><b>{live.phase || 'Working'}</b></span>
+      <span><b>{live.phase || 'Working'}</b>{counting ? ' · counting files' : ''}</span>
     {/if}
     <span>{right}</span>
   </div>

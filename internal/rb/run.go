@@ -736,6 +736,7 @@ func (r *runner) runBackup() {
 	}
 
 	var summary M
+	progress := newBackupProgress(r.settings, job.ID)
 	r.phase("Backing up")
 	code, errLines := r.resticUnlocking(backupArgs(job, r.repo, r.settings, tmp), func(v any) {
 		j, ok := v.(M)
@@ -748,21 +749,9 @@ func (r *runner) runBackup() {
 			if cf, ok := j["current_files"].([]any); ok && len(cf) > 0 && cf[0] != nil {
 				current = str(cf[0])
 			}
-			var eta any
-			if j["seconds_remaining"] != nil {
-				eta = toInt64(j["seconds_remaining"])
-			}
-			r.op["progress"] = M{
-				"percent":     toFloat(j["percent_done"]),
-				"files_done":  toInt64(j["files_done"]),
-				"total_files": toInt64(j["total_files"]),
-				"bytes_done":  toInt64(j["bytes_done"]),
-				"total_bytes": toInt64(j["total_bytes"]),
-				"errors":      toInt64(j["error_count"]),
-				"current":     current,
-				"eta":         eta,
-				"at":          now(),
-			}
+			pr := progress.update(j)
+			pr["current"] = current
+			r.op["progress"] = pr
 		case "summary":
 			delete(j, "message_type")
 			summary = j

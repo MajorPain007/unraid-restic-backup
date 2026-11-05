@@ -2,8 +2,8 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "restic.backup">
 <!ENTITY author    "MajorPain007">
-<!ENTITY version   "2026.11.05.01">
-<!ENTITY md5       "5cc2e21677574dc9032cbcddcda0d0c0">
+<!ENTITY version   "2026.11.05.02">
+<!ENTITY md5       "4b8f6c7523041b62c97efd9e55e4b43a">
 <!ENTITY launch    "Settings/ResticBackup">
 <!ENTITY github    "MajorPain007/unraid-restic-backup">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/src/&name;.plg">
@@ -21,6 +21,15 @@
         icon="history">
 
 <CHANGES>
+## Version 2026.11.05.02 - Honest backup progress
+
+- restic counts the files while it already backs up, so the total kept
+  growing and the bar sat at 99 percent again and again. While it is still
+  counting, the bar now uses the size of the last backup as an estimate,
+  marked as about and still counting, and shows no time left. A first
+  backup shows how much is done so far until the count is complete. Once
+  restic has counted everything, its own figures are shown as before.
+
 ## Version 2026.11.05.01 - New web interface
 
 - The page is rebuilt in Svelte. Everything works as before, with these

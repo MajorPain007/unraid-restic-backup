@@ -26,7 +26,7 @@ done < <(find src tests -name '*.php' -o -name '*.page')
 echo "  $n files"
 
 section "Static checks"
-node tests/js_check.js || fail=1
+( cd web && { [ -d node_modules ] || npm ci --silent; } && npm run --silent check ) || fail=1
 
 section "Pages and manifest"
 for p in src/*.page; do

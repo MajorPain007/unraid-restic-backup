@@ -19,6 +19,11 @@ jobs:
           php-version: '8.3'
           coverage: none
           tools: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - name: Unit tests, static checks, syntax
         run: bash tests/run.sh
 
@@ -67,10 +72,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - name: Build
         run: |
           RB_OUT_DIR=dist RB_SKIP_PLG=1 ./scripts/build.sh 2026.01.01.01
           tar -tJf dist/restic.backup-2026.01.01.01-x86_64-1.txz | grep -q 'usr/local/emhttp/plugins/restic.backup/bin/restic-backup'
+          tar -tJf dist/restic.backup-2026.01.01.01-x86_64-1.txz | grep -q 'usr/local/emhttp/plugins/restic.backup/assets/app.js'
           mkdir x && tar -C x -xJf dist/restic.backup-2026.01.01.01-x86_64-1.txz && file x/usr/local/emhttp/plugins/restic.backup/bin/restic-backup | grep -q 'x86-64.*statically linked'
           rm -rf x
       - name: A test build changes nothing tracked

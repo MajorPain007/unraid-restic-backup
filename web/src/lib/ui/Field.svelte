@@ -28,7 +28,7 @@
 
 <div class="rb-field" class:wide bind:this={box}>
   {#if label}
-    <label for={id}>{label}{#if optional}<span class="opt"> (optional)</span>{/if}</label>
+    <label for={id}>{label}{#if optional}{' '}<span class="opt">(optional)</span>{/if}</label>
   {/if}
   {@render children()}
   {#if hintContent}

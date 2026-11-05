@@ -99,7 +99,7 @@
         {#if stats}
           <span title={stats.at ? 'Measured ' + relative(stats.at) : null}>
             {bytes(stats.total_size)}
-            {#if stats.compression_space_saving}<small> · {Math.round(stats.compression_space_saving)}% saved by compression</small>{/if}
+            {#if Math.round(stats.compression_space_saving || 0) >= 1}<small> · {Math.round(stats.compression_space_saving)}% saved by compression</small>{/if}
           </span>
         {:else}
           <span class="rb-dim">Not measured yet</span>
@@ -138,7 +138,7 @@
     </div>
   </div>
 
-  {#if stats && stored !== null && stats.total_uncompressed_size > stats.total_size}
+  {#if stats && stored !== null && stats.total_uncompressed_size > stats.total_size && Math.round(stats.compression_space_saving || 0) >= 1}
     <div
       class="rb-storage"
       title={bytes(stats.total_uncompressed_size) + ' of data, ' + bytes(stats.total_size) + ' on disk'}

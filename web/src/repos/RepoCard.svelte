@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '../lib/ui/Icon.svelte';
   import Button from '../lib/ui/Button.svelte';
-  import RepoProgress from './RepoProgress.svelte';
+  import ProgressBlock from '../lib/ui/ProgressBlock.svelte';
   import Sparkline from './Sparkline.svelte';
   import { api } from '../lib/api';
   import { actions } from '../lib/actions';
@@ -89,7 +89,7 @@
       <Icon name="loader" class="rb-spin" />
       {running.kind === 'backup' ? 'Backup "' + running.job_name + '"' : opLabel(running.kind)}
     </div>
-    <RepoProgress op={running} />
+    <ProgressBlock op={running} />
   {/if}
 
   <div class="rb-facts">

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from '../lib/ui/Button.svelte';
-  import OpProgress from './OpProgress.svelte';
+  import ProgressBlock from '../lib/ui/ProgressBlock.svelte';
   import { relative } from '../lib/format';
   import type { Op } from '../lib/types';
   import { stopOp } from './ops';
@@ -19,7 +19,7 @@
     </div>
     <Button icon="stop" small busy={stop.busy} onclick={() => stopOp(op, stop)}>Stop</Button>
   </div>
-  <OpProgress {op} />
+  <ProgressBlock {op} />
 </div>
 
 <style>

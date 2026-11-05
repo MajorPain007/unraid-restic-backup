@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from '../lib/ui/Button.svelte';
-  import ProgressBlock from './ProgressBlock.svelte';
+  import ProgressBlock from '../lib/ui/ProgressBlock.svelte';
   import { api } from '../lib/api';
   import { confirm } from '../lib/dialogs';
   import { actions } from '../lib/actions';

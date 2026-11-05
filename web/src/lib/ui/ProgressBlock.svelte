@@ -14,6 +14,13 @@
   let known = $derived(!!p && !!(p.total_bytes || p.percent));
   let pct = $derived(known ? Math.max(0, Math.min(1, p!.percent || 0)) : 0);
   let rate = $state<number | null>(null);
+  let tick = $state(now());
+
+  $effect(() => {
+    if (known) return;
+    const t = setInterval(() => (tick = now()), 1000);
+    return () => clearInterval(t);
+  });
 
   $effect(() => {
     const prog = p;
@@ -42,7 +49,7 @@
   });
 
   let right = $derived.by(() => {
-    if (!known || !p) return duration(now() - live.started);
+    if (!known || !p) return duration(tick - live.started);
     const bits: string[] = [];
     if (rate) bits.push(bytes(rate) + '/s');
     const eta = p.eta !== null && p.eta !== undefined ? p.eta : rate && p.total_bytes ? (p.total_bytes - p.bytes_done) / rate : null;

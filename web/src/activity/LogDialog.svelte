@@ -4,7 +4,7 @@
   import Button from '../lib/ui/Button.svelte';
   import Icon from '../lib/ui/Icon.svelte';
   import StatusPill from './StatusPill.svelte';
-  import ProgressBlock from './ProgressBlock.svelte';
+  import ProgressBlock from '../lib/ui/ProgressBlock.svelte';
   import { api } from '../lib/api';
   import { app, copyText, fail } from '../lib/state.svelte';
   import { dateTime, plural } from '../lib/format';

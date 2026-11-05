@@ -2,8 +2,8 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "restic.backup">
 <!ENTITY author    "MajorPain007">
-<!ENTITY version   "2026.11.04.01">
-<!ENTITY md5       "162561892f6e8fc29edcdd84de2a31fc">
+<!ENTITY version   "2026.11.05.01">
+<!ENTITY md5       "5cc2e21677574dc9032cbcddcda0d0c0">
 <!ENTITY launch    "Settings/ResticBackup">
 <!ENTITY github    "MajorPain007/unraid-restic-backup">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/src/&name;.plg">
@@ -21,6 +21,27 @@
         icon="history">
 
 <CHANGES>
+## Version 2026.11.05.01 - New web interface
+
+- The page is rebuilt in Svelte. Everything works as before, with these
+  additions:
+- Jobs: the run history bars show how much each run added and can be
+  opened from the keyboard; the editor has section links at the top and
+  saves with Ctrl+S; folders inside another listed folder are pointed out.
+- Repositories: size history at a glance on each card, how much
+  compression saves, and smoother charts with touch support. Test
+  connection in the SSH key dialog now really connects.
+- Snapshots: a timeline of the last weeks, sortable columns, a filter for
+  large folders, keyboard navigation, file type icons, and comparisons
+  whose entries open the file in the right snapshot.
+- Activity: history grouped by day; the log viewer can search, show only
+  errors and warnings, follow a running operation and download the log.
+- Settings: unsaved changes are marked and can be discarded, and the page
+  warns before leaving them behind.
+- The tab bar fits on phone screens.
+- Fixed: the snapshot filter Not from a job showed all snapshots, and a
+  restore into another folder could still ask to delete files.
+
 ## Version 2026.11.04.01 - Rewritten in Go
 
 - The plugin is now one program written in Go instead of PHP scripts. It

@@ -227,7 +227,7 @@
     <div class="rb-hint" style="margin:4px 0 0 44px">Retention only drops snapshots; prune frees the space they used.</div>
     {#if repo.maintenance.prune.enabled}
       <div style="margin-top:12px">
-        <ScheduleEditor bind:schedule={repo.maintenance.prune.schedule} />
+        <ScheduleEditor bind:schedule={repo.maintenance.prune.schedule} allowManual={false} />
         <div class="rb-fields" style="margin-top:12px">
           <Field label="Leave unused at most" hint="Repacking costs time and traffic; a little unused space saves both.">
             <input type="text" autocomplete="off" spellcheck="false" placeholder="10%" bind:value={repo.maintenance.prune.max_unused} />
@@ -239,7 +239,7 @@
     <Toggle bind:checked={repo.maintenance.check.enabled} label="Check the repository" />
     {#if repo.maintenance.check.enabled}
       <div style="margin-top:12px">
-        <ScheduleEditor bind:schedule={repo.maintenance.check.schedule} />
+        <ScheduleEditor bind:schedule={repo.maintenance.check.schedule} allowManual={false} />
         <div class="rb-fields" style="margin-top:12px">
           <Field label="Read" hint="Reading data downloads it - mind the traffic for remote repositories.">
             <select bind:value={repo.maintenance.check.read_data}>

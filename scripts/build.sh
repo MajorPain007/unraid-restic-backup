@@ -26,9 +26,14 @@ mkdir -p "${PDIR}/include" "${PDIR}/bin" "${STAGE}/install"
     -ldflags "-s -w -X github.com/MajorPain007/unraid-restic-backup/internal/rb.buildName=${PLUGIN}" \
     -o "${PDIR}/bin/restic-backup" ./cmd/restic-backup )
 
+( cd "${ROOT_DIR}/web" && { [ -d node_modules ] || npm ci --silent; } && npm run --silent build >/dev/null ) \
+    || { echo "the web interface did not build" >&2; exit 1; }
+
 cp "${ROOT_DIR}/src/"*.page "${ROOT_DIR}/src/README.md" "${PDIR}/"
 cp "${ROOT_DIR}/src/include/page.php" "${ROOT_DIR}/src/include/api.php" "${PDIR}/include/"
-cp -R "${ROOT_DIR}/src/assets" "${ROOT_DIR}/src/event" "${PDIR}/"
+mkdir -p "${PDIR}/assets"
+cp "${ROOT_DIR}/web/dist/app.js" "${ROOT_DIR}/web/dist/app.css" "${PDIR}/assets/"
+cp -R "${ROOT_DIR}/src/event" "${PDIR}/"
 find "${PDIR}" -name '.DS_Store' -delete
 
 if [ "$PLUGIN" != "restic.backup" ]; then
@@ -56,11 +61,6 @@ if command -v php >/dev/null 2>&1; then
     while IFS= read -r f; do
         php -l "$f" >/dev/null || { echo "PHP syntax error in $f" >&2; exit 1; }
     done < <(find "${PDIR}" -name '*.php' -o -name '*.page')
-fi
-if command -v node >/dev/null 2>&1; then
-    for f in "${PDIR}/assets/js/"*.js; do
-        node --check "$f" || { echo "JavaScript syntax error in $f" >&2; exit 1; }
-    done
 fi
 
 cat > "${STAGE}/install/slack-desc" << DESC

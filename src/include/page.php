@@ -7,6 +7,4 @@ $rbBase = '/plugins/restic.backup/assets';
      data-api="/plugins/restic.backup/include/api.php">
   <div class="rb-boot">Loading&hellip;</div>
 </div>
-<?php foreach (array('core', 'jobs', 'repos', 'snapshots', 'activity', 'settings', 'consistency', 'preview', 'sizes', 'main') as $rbScript): ?>
-<script src="<?php autov("$rbBase/js/$rbScript.js"); ?>"></script>
-<?php endforeach; ?>
+<script src="<?php autov("$rbBase/app.js"); ?>"></script>

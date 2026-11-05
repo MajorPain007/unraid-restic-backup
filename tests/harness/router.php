@@ -12,8 +12,9 @@ if ($uri === '/plugins/restic.backup/include/api.php') {
     return true;
 }
 if (strpos($uri, '/plugins/restic.backup/assets/') === 0) {
-    $file = realpath($src . '/assets/' . substr($uri, strlen('/plugins/restic.backup/assets/')));
-    if ($file === false || strpos($file, realpath("$src/assets")) !== 0) {
+    $dist = dirname($src) . '/web/dist';
+    $file = realpath($dist . '/' . substr($uri, strlen('/plugins/restic.backup/assets/')));
+    if ($file === false || strpos($file, realpath($dist)) !== 0) {
         http_response_code(404);
         return true;
     }
@@ -130,7 +131,6 @@ $real = is_file(__DIR__ . '/.unraid/default-base.css');
   <?php include "$src/include/page.php"; ?>
   <?php if (isset($_GET['audit'])): ?><script src="/harness/audit.js"></script><?php endif; ?>
 </div>
-<!-- Unraid's footer: fixed to the bottom, above most of the page (z-index 10000). -->
 <div id="footer"><span class="footer-left">Array Started</span><span class="footer-spacer"></span>
   <span>Unraid&reg; webGui &copy;2026, Lime Technology, Inc. <a href="#">manual</a></span></div>
 </body>

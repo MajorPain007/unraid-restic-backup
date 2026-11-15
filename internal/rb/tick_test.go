@@ -184,3 +184,31 @@ func TestTickLeavesTheJournalAloneWhileTheArrayIsStopped(t *testing.T) {
 		t.Fatal("the journal must stay until the array is up")
 	}
 }
+
+func TestTwoJobsAtTheSameTimeBothRun(t *testing.T) {
+	cfg, _, spawned := tickTestSetup(t)
+	cfg.Settings.Secrets = "plain"
+	b := cfg.Jobs[0]
+	b.ID, b.Name = "j00000002", "Other"
+	cfg.Jobs = append(cfg.Jobs, b)
+	for i := range cfg.Jobs {
+		cfg.Jobs[i].Schedule = Schedule{Mode: "cron", Cron: "0 3 * * *", CatchUp: false}
+	}
+	if !configSave(cfg) {
+		t.Fatal("save")
+	}
+	slot := cronLocal(2026, 11, 3, 3, 0)
+	stateUpdate(cfg.Settings, func(s M) {
+		for _, id := range []string{"j00000001", "j00000002"} {
+			sub(s, "jobs", id)["sched"] = M{"key": "cron:0 3 * * *", "since": slot - 86400, "slot": slot - 86400}
+		}
+	})
+	schedulerTick(configLoad(), slot+30)
+	if len(*spawned) != 1 {
+		t.Fatalf("one job starts at 03:00, the other waits for the repository: %v", *spawned)
+	}
+	schedulerTick(configLoad(), slot+30*60)
+	if len(*spawned) != 2 || (*spawned)[1][2] != "j00000002" {
+		t.Fatalf("the waiting job starts once the repository is free, even after 30 minutes: %v", *spawned)
+	}
+}

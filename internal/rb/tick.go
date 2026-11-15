@@ -97,6 +97,7 @@ func schedulerTick(cfg *Config, t int64) {
 	state := stateRead(settings)
 	started := map[string]bool{}
 	recordJobs := map[string]M{}
+	queueJobs := map[string]bool{}
 	recordRepos := map[string]map[string]M{}
 
 	for _, job := range cfg.Jobs {
@@ -117,7 +118,14 @@ func schedulerTick(cfg *Config, t int64) {
 			held = true
 			continue
 		}
-		if (holdoff && !queued) || started[job.Repo] || repoBusy(job.Repo) {
+		if holdoff && !queued {
+			continue
+		}
+		if started[job.Repo] || repoBusy(job.Repo) {
+			if d.Due {
+				recordJobs[job.ID] = d.Entry
+				queueJobs[job.ID] = true
+			}
 			continue
 		}
 		trigger := "manual"
@@ -179,6 +187,9 @@ func schedulerTick(cfg *Config, t int64) {
 		stateUpdate(settings, func(s M) {
 			for id, entry := range recordJobs {
 				sub(s, "jobs", id)["sched"] = entry
+			}
+			for id := range queueJobs {
+				sub(s, "jobs", id)["queued"] = t
 			}
 			for id, kinds := range recordRepos {
 				for kind, entry := range kinds {

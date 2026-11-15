@@ -346,7 +346,7 @@ func sub(m M, keys ...string) M {
 	return cur
 }
 
-func spawn(args ...string) {
+func spawn(args ...string) error {
 	cmd := exec.Command(SelfBin, args...)
 	cmd.Stdin = nil
 	cmd.Stdout = nil
@@ -354,7 +354,9 @@ func spawn(args ...string) {
 	cmd.Dir = "/"
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Env = os.Environ()
-	if cmd.Start() == nil {
-		cmd.Process.Release()
+	if err := cmd.Start(); err != nil {
+		return err
 	}
+	cmd.Process.Release()
+	return nil
 }

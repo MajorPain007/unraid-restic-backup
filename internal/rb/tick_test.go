@@ -3,6 +3,7 @@ package rb
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -25,7 +26,7 @@ func tickTestSetup(t *testing.T) (*Config, string, *[][]string) {
 		t.Setenv("PATH", base+"/bin:"+os.Getenv("PATH"))
 	}
 	spawned := &[][]string{}
-	tickSpawn = func(args ...string) { *spawned = append(*spawned, args) }
+	tickSpawn = func(args ...string) error { *spawned = append(*spawned, args); return nil }
 
 	repo := defaultRepo()
 	repo.ID, repo.Name, repo.Type, repo.Local.Path = "r00000001", "Disk", "local", base+"/repo"
@@ -210,5 +211,47 @@ func TestTwoJobsAtTheSameTimeBothRun(t *testing.T) {
 	schedulerTick(configLoad(), slot+30*60)
 	if len(*spawned) != 2 || (*spawned)[1][2] != "j00000002" {
 		t.Fatalf("the waiting job starts once the repository is free, even after 30 minutes: %v", *spawned)
+	}
+}
+
+func TestOnlyOneTickRunsAtATime(t *testing.T) {
+	cfg, _, spawned := tickTestSetup(t)
+	cfg.Settings.Secrets = "plain"
+	cfg.Jobs[0].Schedule = Schedule{Mode: "cron", Cron: "* * * * *", CatchUp: true}
+	configSave(cfg)
+	stateUpdate(cfg.Settings, func(s M) {
+		sub(s, "jobs", "j00000001")["sched"] = M{"key": "cron:* * * * *", "since": now() - 3600, "slot": now() - 3600}
+	})
+	l := lockFile(RunDir+"/tick.lock", false)
+	if l == nil {
+		t.Fatal("lock")
+	}
+	cmdTick(nil)
+	l.Unlock()
+	if len(*spawned) != 0 {
+		t.Fatalf("a second tick must end at once while one runs: %v", *spawned)
+	}
+	cmdTick(nil)
+	if len(*spawned) != 1 {
+		t.Fatalf("without a running tick the due job starts: %v", *spawned)
+	}
+}
+
+func TestAFailedStartKeepsTheSlotAndTells(t *testing.T) {
+	cfg, notes, _ := tickTestSetup(t)
+	cfg.Settings.Secrets = "plain"
+	configSave(cfg)
+	tickSpawn = func(args ...string) error { return errors.New("exec format error") }
+	slot := cronLocal(2026, 11, 3, 3, 0)
+	stateUpdate(cfg.Settings, func(s M) {
+		sub(s, "jobs", "j00000001")["sched"] = M{"key": "cron:0 3 * * *", "since": slot - 86400, "slot": slot - 86400}
+	})
+	schedulerTick(configLoad(), slot+30)
+	sched := mapOf(mapOf(mapOf(stateRead(cfg.Settings)["jobs"])["j00000001"])["sched"])
+	if toInt64(sched["slot"]) != slot-86400 {
+		t.Fatalf("a run that could not be started must not use up its slot: %v", sched)
+	}
+	if n := waitNotes(notes, 1); len(n) != 1 || !strings.Contains(n[0], "exec format error") {
+		t.Fatalf("the failure is reported, got %q", n)
 	}
 }

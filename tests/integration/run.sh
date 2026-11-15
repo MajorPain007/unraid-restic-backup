@@ -89,7 +89,7 @@ pkill -f "sleep 300"
 $CFG job "{\"id\":\"j00000009\",\"name\":\"Hook\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"enabled\":false}"
 
 group "The scheduler"
-$CFG job "{\"id\":\"j00000001\",\"name\":\"Documents\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"schedule\":{\"mode\":\"cron\",\"cron\":\"* * * * *\"},\"retention\":{\"last\":2,\"daily\":0,\"weekly\":0,\"monthly\":0}}"
+$CFG job "{\"id\":\"j00000001\",\"name\":\"Documents\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"schedule\":{\"mode\":\"cron\",\"cron\":\"0 3 * * *\",\"catch_up\":true},\"retention\":{\"last\":2,\"daily\":0,\"weekly\":0,\"monthly\":0}}"
 n0=$(ls "$T/run/ops/" | grep -c json)
 $SCHED; wait_ops
 check "the queued job starts once the repository is free" \
@@ -195,7 +195,7 @@ sleep 1
 check "a later tick does not record or notify it again" \
     '[ "$(grep -c "\"id\":\"$kid\"" $M/data/history.jsonl)" = 1 ] && [ "$(grep -c "interrupted" $T/notifications)" = 1 ]'
 restic -r "$M/repo" unlock >/dev/null 2>&1
-$CFG job "{\"id\":\"j00000001\",\"name\":\"Documents\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"schedule\":{\"mode\":\"cron\",\"cron\":\"* * * * *\"},\"retention\":{\"last\":2,\"daily\":0,\"weekly\":0,\"monthly\":0}}"
+$CFG job "{\"id\":\"j00000001\",\"name\":\"Documents\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"schedule\":{\"mode\":\"cron\",\"cron\":\"0 3 * * *\",\"catch_up\":true},\"retention\":{\"last\":2,\"daily\":0,\"weekly\":0,\"monthly\":0}}"
 rm -f "$M/src/sub/huge.bin"
 $CFG repo "{\"id\":\"r00000001\",\"name\":\"Disk\",\"type\":\"local\",\"local\":{\"path\":\"$M/repo\"}}"
 

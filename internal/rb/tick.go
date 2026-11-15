@@ -48,6 +48,11 @@ func notifyOnce(name, subject, problem string) bool {
 
 func cmdTick(args []string) int {
 	os.MkdirAll(RunDir, 0o755)
+	l := lockFile(RunDir+"/tick.lock", false)
+	if l == nil {
+		return 0
+	}
+	defer l.Unlock()
 	touchFile(RunDir + "/scheduler.tick")
 	browseReap(false)
 	if notifyOnce("config_problem", "Restic Backup cannot read its settings", configProblem()) {
@@ -98,6 +103,7 @@ func schedulerTick(cfg *Config, t int64) {
 	started := map[string]bool{}
 	recordJobs := map[string]M{}
 	queueJobs := map[string]bool{}
+	var spawnFailed error
 	recordRepos := map[string]map[string]M{}
 
 	for _, job := range cfg.Jobs {
@@ -132,7 +138,10 @@ func schedulerTick(cfg *Config, t int64) {
 		if d.Due {
 			trigger = "schedule"
 		}
-		tickSpawn("run", "backup", job.ID, trigger)
+		if err := tickSpawn("run", "backup", job.ID, trigger); err != nil {
+			spawnFailed = err
+			continue
+		}
 		started[job.Repo] = true
 		if d.Due {
 			recordJobs[job.ID] = d.Entry
@@ -169,7 +178,10 @@ func schedulerTick(cfg *Config, t int64) {
 			if holdoff || started[repo.ID] || repoBusy(repo.ID) || opRunningOn(repo.ID, "restore") != nil {
 				continue
 			}
-			tickSpawn("run", kind, repo.ID, "schedule")
+			if err := tickSpawn("run", kind, repo.ID, "schedule"); err != nil {
+				spawnFailed = err
+				continue
+			}
 			started[repo.ID] = true
 			if recordRepos[repo.ID] == nil {
 				recordRepos[repo.ID] = map[string]M{}
@@ -178,6 +190,11 @@ func schedulerTick(cfg *Config, t int64) {
 		}
 	}
 
+	why := ""
+	if spawnFailed != nil {
+		why = "A scheduled run could not be started: " + spawnFailed.Error() + ". It is tried again every minute; reinstalling the plugin usually helps."
+	}
+	notifyOnce("spawn_failed", "Restic Backup cannot start scheduled runs", why)
 	notifyLocked := held && !phpTruthy(state["locked_notified"])
 	forget := !locked && has(state, "locked_notified")
 	if notifyLocked {

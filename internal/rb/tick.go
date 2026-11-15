@@ -59,8 +59,24 @@ func cmdTick(args []string) int {
 	if prepareDataDir(cfg.Settings) != "" {
 		return 0
 	}
+	reapDeadRuns(cfg)
 	schedulerTick(cfg, now())
 	return 0
+}
+
+func reapDeadRuns(cfg *Config) {
+	for _, f := range opsFiles() {
+		op, ok := jsonRead(f)
+		if !ok || str(op["status"]) != "running" || pidAlive(op["runner_pid"]) || pidAlive(op["pid"]) {
+			continue
+		}
+		r := &runner{op: op, cfg: cfg, settings: cfg.Settings, logFile: str(op["log"]),
+			repo: Repo{ID: str(op["repo"]), Name: str(op["repo_name"])}, job: cfg.job(str(op["job"]))}
+		if repo := cfg.repo(r.repo.ID); repo != nil {
+			r.repo = *repo
+		}
+		r.finish("error", "The run was interrupted: its process ended without finishing (killed, out of memory, or the server stopped).", nil)
+	}
 }
 
 func schedulerTick(cfg *Config, t int64) {

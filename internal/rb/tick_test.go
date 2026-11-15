@@ -127,3 +127,41 @@ func TestEventArrayStartedNotifiesWhenLocked(t *testing.T) {
 		t.Fatal("the notification must be remembered")
 	}
 }
+
+func TestTickRecordsAKilledRunOnce(t *testing.T) {
+	cfg, notes, _ := tickTestSetup(t)
+	os.MkdirAll(OpsDir, 0o755)
+	op := M{"id": "20261115-030000-abcd", "kind": "backup", "job": "j00000001", "job_name": "Docs", "repo": "r00000001",
+		"repo_name": "Disk", "trigger": "schedule", "started": now() - 600, "ended": int64(0), "status": "running",
+		"runner_pid": 999999, "pid": 999998, "log": RunDir + "/logs/x.log", "error": "", "summary": nil}
+	jsonWrite(opFile("20261115-030000-abcd"), op, 0o644)
+	reapDeadRuns(cfg)
+	reapDeadRuns(cfg)
+	if got := str(opRead("20261115-030000-abcd")["status"]); got != "error" {
+		t.Fatalf("the op must end as error, got %q", got)
+	}
+	h := historyRead(cfg.Settings, M{"job": "j00000001"}, 10)
+	if len(h) != 1 || !strings.Contains(str(h[0]["error"]), "interrupted") {
+		t.Fatalf("one history entry saying interrupted, got %v", h)
+	}
+	last := mapOf(mapOf(mapOf(stateRead(cfg.Settings)["jobs"])["j00000001"])["last"])
+	if str(last["status"]) != "error" {
+		t.Fatalf("the job's last result must be the error, got %v", last)
+	}
+	waitNotes(notes, 1)
+	time.Sleep(200 * time.Millisecond)
+	if n := waitNotes(notes, 1); len(n) != 1 || !strings.Contains(n[0], "interrupted") || !strings.Contains(n[0], "-i alert") {
+		t.Fatalf("one alert notification, got %q", n)
+	}
+}
+
+func TestTickLeavesARunAloneWhileResticStillRuns(t *testing.T) {
+	cfg, _, _ := tickTestSetup(t)
+	os.MkdirAll(OpsDir, 0o755)
+	jsonWrite(opFile("20261115-030000-abce"), M{"id": "20261115-030000-abce", "kind": "backup", "job": "j00000001",
+		"repo": "r00000001", "status": "running", "runner_pid": 999999, "pid": os.Getpid()}, 0o644)
+	reapDeadRuns(cfg)
+	if got := str(opRead("20261115-030000-abce")["status"]); got != "running" {
+		t.Fatalf("restic is still running: leave the op, got %q", got)
+	}
+}

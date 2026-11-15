@@ -165,6 +165,29 @@ $RB stop-all 30
 check "stop-all ends a running backup" '[ "$(op_field status)" = cancelled ] && ! pgrep -f "restic-backup run " >/dev/null' "$(op_field status)"
 check "...and removes the decrypted copies from RAM" '[ ! -e $T/run/secrets/r00000001.password ]'
 wait $RPID 2>/dev/null
+h0=$(wc -l < "$M/data/history.jsonl")
+: > $T/notifications
+mark
+$RUN backup j00000001 manual &
+RPID=$!
+wait_phase "Backing up"
+CPID=$(op_field pid)
+kill -9 $RPID; wait $RPID 2>/dev/null
+[ "$CPID" -gt 0 ] 2>/dev/null && kill -9 "$CPID" 2>/dev/null
+sleep 0.5
+$SCHED
+sleep 1
+check "the next tick records a killed run as interrupted" \
+    '[ "$(op_field status)" = error ] && op_field error | grep -q interrupted && [ "$(wc -l < $M/data/history.jsonl)" = $((h0 + 1)) ]' \
+    "$(op_field status) $(op_field error) history $(wc -l < $M/data/history.jsonl)"
+check "...as the job's last result" \
+    'php -r "\$s=json_decode(file_get_contents(\$argv[1]),true); exit(\$s[\"jobs\"][\"j00000001\"][\"last\"][\"status\"]===\"error\" ? 0 : 1);" $M/data/state.json'
+check "...and notifies once" '[ "$(grep -c "interrupted" $T/notifications)" = 1 ]' "$(cat $T/notifications)"
+$SCHED
+sleep 1
+check "a later tick does not record or notify it again" \
+    '[ "$(wc -l < $M/data/history.jsonl)" = $((h0 + 1)) ] && [ "$(grep -c "interrupted" $T/notifications)" = 1 ]'
+restic -r "$M/repo" unlock >/dev/null 2>&1
 rm -f "$M/src/sub/huge.bin"
 $CFG repo "{\"id\":\"r00000001\",\"name\":\"Disk\",\"type\":\"local\",\"local\":{\"path\":\"$M/repo\"}}"
 

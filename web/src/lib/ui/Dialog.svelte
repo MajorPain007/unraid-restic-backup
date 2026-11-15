@@ -24,6 +24,11 @@
   } = $props();
 
   let panel: HTMLElement;
+  const opener = document.activeElement as HTMLElement | null;
+
+  $effect(() => () => {
+    if (opener?.isConnected) opener.focus();
+  });
 
   $effect(() => {
     const t = setTimeout(() => {
@@ -35,13 +40,30 @@
     return () => clearTimeout(t);
   });
 
+  function trap(e: KeyboardEvent) {
+    if (e.key !== 'Tab' || !panel) return;
+    const items = [...panel.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')].filter(
+      (el) => !el.hasAttribute('disabled') && el.getClientRects().length
+    );
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
   function backdrop(e: MouseEvent) {
     if (e.target === e.currentTarget && !sticky) onclose();
   }
 </script>
 
 <div class="rb-overlay" class:center={!drawer} role="presentation" onmousedown={backdrop}>
-  <div bind:this={panel} class={drawer ? 'rb-drawer' : 'rb-modal'} class:wide role="dialog" aria-modal="true" aria-label={title}>
+  <div bind:this={panel} class={drawer ? 'rb-drawer' : 'rb-modal'} class:wide role="dialog" aria-modal="true" aria-label={title} data-sticky={sticky ? 'yes' : undefined} tabindex="-1" onkeydown={trap}>
     <div class="rb-panel-head">
       {#if icon}<Icon name={icon} />{/if}
       <h2>{title}</h2>

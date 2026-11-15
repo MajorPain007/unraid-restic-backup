@@ -28,6 +28,8 @@
   let restMode = $state<'keep' | 'set'>('keep');
   let restValue = $state('');
   let flags = $state(repo.options.extra_flags.join('\n'));
+  const start = untrack(() => JSON.stringify([repo, flags, pwMode, pwValue, restMode, restValue]));
+  let changed = $derived(JSON.stringify([repo, flags, pwMode, pwValue, restMode, restValue]) !== start);
   let error = $state<unknown>(null);
   let saving = $state(false);
   let top: HTMLElement | undefined = $state();
@@ -91,7 +93,7 @@
   }
 </script>
 
-<Dialog drawer title={isNew ? 'Add repository' : 'Edit "' + original?.name + '"'} icon="repo" onclose={() => close()}>
+<Dialog drawer sticky={changed} title={isNew ? 'Add repository' : 'Edit "' + original?.name + '"'} icon="repo" onclose={() => close()}>
   <div bind:this={top}><ErrorBox {error} /></div>
 
   {#if isNew}

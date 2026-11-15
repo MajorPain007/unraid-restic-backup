@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import { closeDialog, closeMenu, closeTopDialog, dialogs, menu, toasts } from '../state.svelte';
+  import { confirm } from '../dialogs';
 
   let menuEl: HTMLElement | undefined = $state();
   let pos = $state({ top: 0, left: 0 });
@@ -21,7 +22,15 @@
       closeMenu();
       return;
     }
-    if (dialogs.length) closeTopDialog();
+    if (!dialogs.length) return;
+    const panels = document.querySelectorAll<HTMLElement>('[role=dialog]');
+    if (panels[panels.length - 1]?.dataset.sticky !== 'yes') {
+      closeTopDialog();
+      return;
+    }
+    confirm({ title: 'Discard your changes?', text: 'What you entered in this dialog has not been saved.', confirm: 'Discard', danger: true }).then(
+      (ok) => ok && closeTopDialog()
+    );
   }
 
   function mousedown(e: MouseEvent) {

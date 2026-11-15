@@ -68,6 +68,8 @@
   let iexclText = $state(initial.iexcludes.join('\n'));
   let flagsText = $state(initial.advanced.extra_flags.join('\n'));
   let tagsText = $state(initial.tags.join(' '));
+  const start = untrack(() => JSON.stringify([job, exclText, iexclText, flagsText, tagsText]));
+  let changed = $derived(JSON.stringify([job, exclText, iexclText, flagsText, tagsText]) !== start);
 
   let error = $state<unknown>(null);
   let saving = $state(false);
@@ -158,7 +160,7 @@
   <h3 id="{uid}-{name}"><Icon name={icon} />{title}</h3>
 {/snippet}
 
-<Dialog drawer title={isNew ? 'New backup job' : `Edit "${savedName}"`} icon="archive" onclose={() => close()}>
+<Dialog drawer sticky={changed} title={isNew ? 'New backup job' : `Edit "${savedName}"`} icon="archive" onclose={() => close()}>
   <div bind:this={root} class="rb-je">
     <nav class="rb-je-nav" aria-label="Sections">
       {#each SECTIONS as [name, label] (name)}

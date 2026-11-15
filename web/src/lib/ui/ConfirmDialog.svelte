@@ -11,8 +11,9 @@
   }: { title: string; text: string; confirm?: string; danger?: boolean; close: (r: boolean) => void } = $props();
 
   let yes: HTMLElement;
+  let no: HTMLElement;
   $effect(() => {
-    const t = setTimeout(() => yes?.querySelector('button')?.focus(), 40);
+    const t = setTimeout(() => (danger ? no : yes)?.querySelector('button')?.focus(), 40);
     return () => clearTimeout(t);
   });
 </script>
@@ -21,7 +22,9 @@
   <p>{text}</p>
   {#snippet actions()}
     <div class="rb-spacer"></div>
-    <Button onclick={() => close(false)}>Cancel</Button>
+    <span bind:this={no} style="display:contents">
+      <Button onclick={() => close(false)}>Cancel</Button>
+    </span>
     <span bind:this={yes} style="display:contents">
       <Button kind={danger ? 'danger solid' : 'primary'} onclick={() => close(true)}>{confirm}</Button>
     </span>

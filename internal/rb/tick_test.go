@@ -255,3 +255,24 @@ func TestAFailedStartKeepsTheSlotAndTells(t *testing.T) {
 		t.Fatalf("the failure is reported, got %q", n)
 	}
 }
+
+func TestNoBackupStartsWhileARestoreRuns(t *testing.T) {
+	cfg, _, spawned := tickTestSetup(t)
+	cfg.Settings.Secrets = "plain"
+	configSave(cfg)
+	os.MkdirAll(OpsDir, 0o755)
+	opWrite(M{"id": "20261115-030000-abcd", "kind": "restore", "repo": "r00000001", "status": "running", "runner_pid": os.Getpid()})
+	stateUpdate(cfg.Settings, func(s M) {
+		sub(s, "jobs", "j00000001")["sched"] = M{"key": "cron:0 3 * * *", "since": now() - 3*86400, "slot": now() - 3*86400}
+	})
+	schedulerTick(configLoad(), now())
+	if len(*spawned) != 0 {
+		t.Fatalf("no backup may start while a restore runs on the repository: %v", *spawned)
+	}
+	if !has(mapOf(mapOf(stateRead(cfg.Settings)["jobs"])["j00000001"]), "queued") {
+		t.Fatal("the backup waits for the restore instead of losing its slot")
+	}
+	if code := cmdRun([]string{"backup", "j00000001", "manual"}); code != 75 {
+		t.Fatalf("a backup started by hand during a restore must wait, got exit %d", code)
+	}
+}

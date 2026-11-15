@@ -1108,6 +1108,10 @@ func cmdRun(args []string) int {
 	var lock *fileLock
 	if kind != "restore" {
 		lock = repoLock(repo.ID)
+		if lock != nil && kind == "backup" && opRunningOn(repo.ID, "restore") != nil {
+			lock.Unlock()
+			lock = nil
+		}
 		if lock == nil {
 			if job != nil && kind == "backup" {
 				jobID := job.ID

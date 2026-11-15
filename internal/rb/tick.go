@@ -127,7 +127,7 @@ func schedulerTick(cfg *Config, t int64) {
 		if holdoff && !queued {
 			continue
 		}
-		if started[job.Repo] || repoBusy(job.Repo) {
+		if started[job.Repo] || repoBusy(job.Repo) || opRunningOn(job.Repo, "restore") != nil {
 			if d.Due {
 				recordJobs[job.ID] = d.Entry
 				queueJobs[job.ID] = true

@@ -100,6 +100,8 @@ check "...and with \"always\" puts the snapshot's version back" '[ "$(cat $M/src
 check "the result counts what was restored" '[ "$(op_field summary.files_restored)" -ge 1 ] && [ "$(op_field status)" = success ]'
 r=$(call restore_start "{\"repo\":\"$RID\",\"snapshot\":\"$OLD\",\"items\":[\"$M/src2/notes.txt\"],\"target\":\"path\",\"target_path\":\"/tmp/x\"}")
 check "a restore into RAM is refused" '! okay "$r"' "$r"
+r=$(call restore_start "{\"repo\":\"$RID\",\"snapshot\":\"$OLD\",\"items\":[\"/\"],\"target\":\"original\"}")
+check "restoring a whole snapshot over the server is refused" '! okay "$r" && echo "$r" | grep -q "into a folder"' "$r"
 
 group "Downloads"
 dl() { echo "{\"repo\":\"$RID\",\"snapshot\":\"$NEW\",\"path\":\"$1\"}" | $RB "$2"; }

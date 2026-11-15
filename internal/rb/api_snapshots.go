@@ -437,7 +437,10 @@ func apiRestoreStart(p M) (M, error) {
 		}
 	} else {
 		for _, path := range items {
-			if !(under(path, "/mnt") || under(path, "/boot")) && path != "/" {
+			if path == "/" {
+				return nil, apiFail("Restoring a whole snapshot to where it came from would write over the server. Restore it into a folder instead.")
+			}
+			if !(under(path, "/mnt") || under(path, "/boot")) {
 				return nil, apiFail(path + " did not come from /mnt or /boot; restore it into a folder instead.")
 			}
 		}

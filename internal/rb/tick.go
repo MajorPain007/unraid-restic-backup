@@ -33,19 +33,26 @@ func touchFile(p string) {
 	}
 }
 
+func notifyOnce(name, subject, problem string) bool {
+	marker := RunDir + "/" + name + ".notified"
+	if problem == "" {
+		os.Remove(marker)
+		return false
+	}
+	if !exists(marker) {
+		notify(subject, problem, "alert", "")
+		touchFile(marker)
+	}
+	return true
+}
+
 func cmdTick(args []string) int {
 	os.MkdirAll(RunDir, 0o755)
 	touchFile(RunDir + "/scheduler.tick")
 	browseReap(false)
-	marker := RunDir + "/config_problem.notified"
-	if p := configProblem(); p != "" {
-		if !exists(marker) {
-			notify("Restic Backup cannot read its settings", p, "alert", "")
-			touchFile(marker)
-		}
+	if notifyOnce("config_problem", "Restic Backup cannot read its settings", configProblem()) {
 		return 0
 	}
-	os.Remove(marker)
 	if !arrayStarted() {
 		return 0
 	}
@@ -53,7 +60,7 @@ func cmdTick(args []string) int {
 	if len(cfg.Jobs) == 0 && len(cfg.Repos) == 0 {
 		return 0
 	}
-	if prepareDataDir(cfg.Settings) != "" {
+	if notifyOnce("data_dir_problem", "Restic Backup cannot use its data folder", prepareDataDir(cfg.Settings)) {
 		return 0
 	}
 	for _, n := range journalRecover(cfg.Settings) {

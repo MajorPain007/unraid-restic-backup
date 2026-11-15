@@ -411,7 +411,7 @@ func (r *runner) preflight() string {
 		return "restic is not installed (" + ResticBin + "). Reinstall the plugin."
 	}
 	if err := prepareDataDir(r.settings); err != "" {
-		return err + " - is the data folder in Settings on a disk that is mounted?"
+		return err
 	}
 	if why := secretsReady(r.settings); why != "" {
 		return why

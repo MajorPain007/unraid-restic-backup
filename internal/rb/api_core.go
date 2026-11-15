@@ -219,8 +219,8 @@ func resticReady(cfg *Config, r *Repo) error {
 	if !secretHas(r.ID, "password") {
 		return apiFail("The repository has no password set.")
 	}
-	if prepareDataDir(cfg.Settings) != "" {
-		return apiFail("The data folder " + cfg.Settings.DataDir + " cannot be created. Is the array started?")
+	if p := prepareDataDir(cfg.Settings); p != "" {
+		return apiFail(p)
 	}
 	return nil
 }

@@ -101,11 +101,11 @@ func fileWrite(path string, data []byte, mode os.FileMode) bool {
 			return false
 		}
 	}
-	tmp := fmt.Sprintf("%s.tmp%d", path, os.Getpid())
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	f, err := os.CreateTemp(dir, filepath.Base(path)+".tmp*")
 	if err != nil {
 		return false
 	}
+	tmp := f.Name()
 	_, err = f.Write(data)
 	if serr := f.Sync(); err == nil {
 		err = serr
@@ -246,7 +246,7 @@ func logAppend(path, line string) {
 
 func logAppendMax(path, line string, max int64) {
 	os.MkdirAll(filepath.Dir(path), 0o755)
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY|syscall.O_NOFOLLOW, 0o644)
 	if err != nil {
 		return
 	}
@@ -260,7 +260,7 @@ func logAppendMax(path, line string, max int64) {
 }
 
 func logTrim(path string, keep int64) {
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	f, err := os.OpenFile(path, os.O_RDWR|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return
 	}

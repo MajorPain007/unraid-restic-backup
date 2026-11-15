@@ -15,10 +15,15 @@ import (
 )
 
 func prepareDataDir(s Settings) string {
+	for _, sub := range []string{"/cache", "/logs", "/journal"} {
+		if st, err := os.Lstat(s.DataDir + sub); err == nil && st.Mode()&os.ModeSymlink != 0 {
+			return s.DataDir + sub + " is a symbolic link. Nothing is written there; remove the link so the folder can be created again."
+		}
+	}
 	for _, sub := range []string{"", "/cache", "/logs"} {
 		dir := s.DataDir + sub
 		if !isDir(dir) && os.MkdirAll(dir, 0o755) != nil {
-			return "Cannot create " + dir
+			return "Cannot create " + dir + " - is the data folder in Settings on a disk that is mounted?"
 		}
 	}
 	if !isDir(RunDir + "/tmp") {
@@ -151,7 +156,7 @@ func historyAppend(s Settings, record M) bool {
 	if !isDir(filepath.Dir(file)) && os.MkdirAll(filepath.Dir(file), 0o755) != nil {
 		return false
 	}
-	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY|syscall.O_NOFOLLOW, 0o644)
 	if err != nil {
 		return false
 	}
@@ -167,7 +172,7 @@ func historyAppend(s Settings, record M) bool {
 
 func historyCompact(s Settings) {
 	file := historyFile(s)
-	f, err := os.OpenFile(file, os.O_RDWR, 0)
+	f, err := os.OpenFile(file, os.O_RDWR|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return
 	}

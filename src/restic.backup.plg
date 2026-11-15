@@ -325,17 +325,18 @@ echo "Restic Backup is installed: Settings, Utilities, Restic Backup."
 
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
-[ -x &pluginDir;/bin/restic-backup ] &amp;&amp; &pluginDir;/bin/restic-backup stop-all 60
-[ -f &pluginDir;/scripts/stop_all.php ] &amp;&amp; /usr/bin/php &pluginDir;/scripts/stop_all.php 60
 rm -f &configDir;/&name;.cron
 command -v update_cron &gt;/dev/null 2&gt;&amp;1 &amp;&amp; update_cron &gt;/dev/null 2&gt;&amp;1
+[ -x &pluginDir;/bin/restic-backup ] &amp;&amp; &pluginDir;/bin/restic-backup stop-all 60
 if [ "$(readlink /usr/local/bin/restic 2&gt;/dev/null)" = "&resticDir;/restic" ]; then
   rm -f /usr/local/bin/restic
 fi
 removepkg &name; 2&gt;/dev/null || rm -rf &pluginDir;
 rm -rf &resticDir; /tmp/&name;
-echo "Restic Backup removed. Your backups are untouched. Repository passwords, SSH keys and"
-echo "settings stay in &configDir; - keep them while you may need the backups."
+rm -f &configDir;/restic_*_linux_amd64.bz2 &configDir;/&name;-*.txz
+echo "Restic Backup removed. Your backups are untouched. Settings, repository passwords and"
+echo "SSH keys stay in &configDir; - unencrypted unless you chose encryption in the settings."
+echo "Keep them while you may need the backups; delete that folder to remove them."
 </INLINE>
 </FILE>
 

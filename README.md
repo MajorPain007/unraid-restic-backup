@@ -32,3 +32,20 @@ entry next to Docker and VMs can be switched on in its settings.
 Keep each repository's password somewhere other than the server - the plugin
 shows it when the repository is created. Without it, the backups cannot be
 read.
+
+## Data and privacy
+
+Settings, repository passwords, the SSH keys for SFTP repositories and their
+known hosts are kept in `/boot/config/plugins/restic.backup/` on the flash
+drive. Passwords and keys are stored unencrypted there unless you choose
+encryption in the settings. History, run logs and restic's cache are kept in
+the data folder you set (on a pool or share); status and running operations
+live in `/tmp/restic.backup/` (RAM). The plugin contacts only your
+repositories, the restic download on GitHub during installation, and a
+Healthchecks URL if you set one.
+
+**Uninstalling** stops running backups and removes the plugin, restic and its
+package from the flash drive. Settings, passwords and keys stay in
+`/boot/config/plugins/restic.backup/`, and the data folder stays, so a
+reinstall picks them up; delete them yourself if you no longer need the
+backups. Repositories are never touched.

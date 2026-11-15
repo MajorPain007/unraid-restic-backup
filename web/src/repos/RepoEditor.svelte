@@ -272,13 +272,13 @@
           </select>
         </Field>
         <Field label="Upload limit (KiB/s)" hint="0 = unlimited. 1 MB/s = 1024.">
-          <input type="number" min="0" autocomplete="off" bind:value={repo.options.limit_upload} />
+          <input type="number" min="0" max="10000000" autocomplete="off" bind:value={repo.options.limit_upload} />
         </Field>
         <Field label="Download limit (KiB/s)" hint="0 = unlimited.">
-          <input type="number" min="0" autocomplete="off" bind:value={repo.options.limit_download} />
+          <input type="number" min="0" max="10000000" autocomplete="off" bind:value={repo.options.limit_download} />
         </Field>
         <Field label="Connections" hint="0 = restic's default.">
-          <input type="number" min="0" autocomplete="off" bind:value={repo.options.connections} />
+          <input type="number" min="0" max="64" autocomplete="off" bind:value={repo.options.connections} />
         </Field>
         <Field label="Extra restic options" wide optional>
           <textarea rows="2" spellcheck="false" placeholder="--pack-size=64" bind:value={flags}></textarea>

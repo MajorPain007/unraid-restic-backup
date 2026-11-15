@@ -37,6 +37,9 @@ func apiRepoSave(p M) (M, error) {
 	return configChange(func(cfg *Config) (M, error) {
 		errs := []string{}
 		isNew := !phpTruthy(in["id"])
+		if passwordMode == "generate" && !isNew {
+			return nil, apiFail("A password is only generated for a new repository. Set one instead, or keep the stored one.")
+		}
 		if isNew {
 			in["id"] = newID("r")
 		} else if cfg.repoIndex(str(in["id"])) < 0 {

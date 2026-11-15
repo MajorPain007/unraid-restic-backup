@@ -637,7 +637,7 @@ func cleanJob(in M, repoIDs []string, errs *[]string) Job {
 		*errs = append(*errs, "Repository: choose where the backup goes")
 	}
 	for _, src := range list(get(in, "sources", []any{}), 100) {
-		p := absPath(src)
+		p := sourcePath(src)
 		if p == "" || !(under(p, "/mnt") || under(p, "/boot")) || p == "/mnt" {
 			*errs = append(*errs, fmt.Sprintf("Sources: \"%s\" - choose folders under /mnt or /boot", src))
 			continue

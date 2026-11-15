@@ -292,7 +292,7 @@ func apiConsistencyDetect(p M) (M, error) {
 	}
 	sources := []string{}
 	for _, src := range in {
-		path := absPath(src)
+		path := sourcePath(src)
 		if path != "" && (under(path, "/mnt") || under(path, "/boot")) {
 			sources = append(sources, path)
 		}

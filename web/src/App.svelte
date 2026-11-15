@@ -14,12 +14,12 @@
   import { plural, relative } from './lib/format';
   import type { Overview } from './lib/types';
 
-  const TABS: [Tab, string, string][] = [
-    ['jobs', 'Jobs', 'archive'],
-    ['repos', 'Repositories', 'repo'],
-    ['snapshots', 'Snapshots', 'layers'],
-    ['activity', 'Activity', 'activity'],
-    ['settings', 'Settings', 'settings']
+  const TABS: [Tab, string, string, string][] = [
+    ['jobs', 'Jobs', 'Jobs', 'archive'],
+    ['repos', 'Repositories', 'Repos', 'repo'],
+    ['snapshots', 'Snapshots', 'Snapshots', 'layers'],
+    ['activity', 'Activity', 'Activity', 'activity'],
+    ['settings', 'Settings', 'Settings', 'settings']
   ];
 
   refresh();
@@ -142,9 +142,9 @@
   {/if}
 
   <div class="rb-tabs" role="tablist">
-    {#each TABS as [id, label, icon] (id)}
+    {#each TABS as [id, label, short, icon] (id)}
       <button type="button" role="tab" class="rb-tab" class:active={app.tab === id} aria-selected={app.tab === id} onclick={() => show(id)}>
-        <Icon name={icon} /><span class="rb-tab-label">{label}</span>
+        <Icon name={icon} /><span class="rb-tab-label"><span class="rb-long">{label}</span><span class="rb-short">{short}</span></span>
         {#if counts[id]}<span class="rb-count" class:err={id === 'jobs' && counts.failed}>{counts[id]}</span>{/if}
       </button>
     {/each}

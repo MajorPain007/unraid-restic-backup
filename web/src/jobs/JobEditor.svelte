@@ -274,12 +274,12 @@
       {#if job.retention.enabled}
         <div class="rb-je-gap14" transition:slide={{ duration: 150 }}>
           <div class="rb-fields">
-            <Field label="Last"><input type="number" min="0" bind:value={job.retention.last} /></Field>
-            <Field label="Hourly"><input type="number" min="0" bind:value={job.retention.hourly} /></Field>
-            <Field label="Daily"><input type="number" min="0" bind:value={job.retention.daily} /></Field>
-            <Field label="Weekly"><input type="number" min="0" bind:value={job.retention.weekly} /></Field>
-            <Field label="Monthly"><input type="number" min="0" bind:value={job.retention.monthly} /></Field>
-            <Field label="Yearly"><input type="number" min="0" bind:value={job.retention.yearly} /></Field>
+            <Field label="Last"><input type="number" min="0" max="100000" bind:value={job.retention.last} /></Field>
+            <Field label="Hourly"><input type="number" min="0" max="100000" bind:value={job.retention.hourly} /></Field>
+            <Field label="Daily"><input type="number" min="0" max="100000" bind:value={job.retention.daily} /></Field>
+            <Field label="Weekly"><input type="number" min="0" max="100000" bind:value={job.retention.weekly} /></Field>
+            <Field label="Monthly"><input type="number" min="0" max="100000" bind:value={job.retention.monthly} /></Field>
+            <Field label="Yearly"><input type="number" min="0" max="100000" bind:value={job.retention.yearly} /></Field>
             <Field label="Everything from the last" optional>
               <input type="text" placeholder="e.g. 14d, 6m, 1y" autocomplete="off" spellcheck="false" bind:value={job.retention.within} />
             </Field>
@@ -395,7 +395,7 @@
             <input type="text" placeholder={server} autocomplete="off" spellcheck="false" bind:value={job.advanced.host} />
           </Field>
           <Field label="Files read at once" hint="0 = restic's default (2). More helps on fast SSDs.">
-            <input type="number" min="0" bind:value={job.advanced.read_concurrency} />
+            <input type="number" min="0" max="64" bind:value={job.advanced.read_concurrency} />
           </Field>
           <Field label="Leave out, ignoring case" wide optional>
             <textarea rows="3" spellcheck="false" bind:value={iexclText} oninput={() => (job.iexcludes = lines(iexclText))}></textarea>

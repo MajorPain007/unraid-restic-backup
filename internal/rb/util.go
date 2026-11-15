@@ -565,6 +565,15 @@ func list(v any, max int) []string {
 	return out
 }
 
+func sourcePath(v any) string {
+	p := absPath(v)
+	raw, _ := scalarString(v)
+	if p != "" && raw != strings.TrimSpace(raw) && isDir(raw) {
+		return filepath.Clean(raw)
+	}
+	return p
+}
+
 func absPath(v any) string {
 	p := ""
 	if s, ok := scalarString(v); ok {

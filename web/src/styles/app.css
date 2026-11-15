@@ -123,6 +123,10 @@
     scrollbar-width: none;
 }
 
+#rb-app .rb-tab .rb-short {
+    display: none;
+}
+
 #rb-app .rb-tabs::-webkit-scrollbar {
     display: none;
 }
@@ -183,6 +187,14 @@
     #rb-app button.rb-tab svg.rb-i {
         width: 19px;
         height: 19px;
+    }
+
+    #rb-app .rb-tab .rb-long {
+        display: none;
+    }
+
+    #rb-app .rb-tab .rb-short {
+        display: inline;
     }
 
     #rb-app .rb-tab-label {
@@ -1768,7 +1780,7 @@
     max-height: 60vh;
     overflow: auto;
     background: rgba(0, 0, 0, 0.3);
-    color: #d7dbe0;
+    color: var(--rb-text);
     border-radius: var(--rb-radius-sm);
     font-family: var(--rb-mono);
     font-size: 12px;
@@ -1778,8 +1790,8 @@
 }
 
 #rb-app.rb-light pre.rb-log {
-    background: #f6f8fa;
-    color: #1f2328;
+    background: var(--rb-input);
+    color: var(--rb-text);
     border: 1px solid var(--rb-border);
 }
 

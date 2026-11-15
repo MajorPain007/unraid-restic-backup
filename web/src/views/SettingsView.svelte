@@ -144,7 +144,7 @@
         </Field>
         <Field label="History" hint="How long finished runs and their logs are listed.">
           <div class="rb-inline">
-            <input type="number" min="7" autocomplete="off" bind:value={s.history_days} />
+            <input type="number" min="7" max="3650" autocomplete="off" bind:value={s.history_days} />
             days
           </div>
         </Field>

@@ -425,8 +425,15 @@ func pidAlive(v any) bool {
 	if pid <= 0 {
 		return false
 	}
-	err := syscall.Kill(pid, 0)
-	return err == nil || err == syscall.EPERM
+	if err := syscall.Kill(pid, 0); err != nil && err != syscall.EPERM {
+		return false
+	}
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return true
+	}
+	_, rest, _ := strings.Cut(string(b), ") ")
+	return !strings.HasPrefix(rest, "Z")
 }
 
 func under(path, dir string) bool {

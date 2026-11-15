@@ -306,7 +306,8 @@ exit 0
 	p.Run()
 	dead := p.Process.Pid
 	runLog := filepath.Join(dir, "run.log")
-	os.MkdirAll(dir+"/journal", 0o755)
+	s := Settings{DataDir: dir + "/data"}
+	os.MkdirAll(journalDir(s), 0o755)
 	php := `{
     "containers": ["web"],
     "vms": ["win"],
@@ -316,18 +317,18 @@ exit 0
     "runner_pid": ` + itoa(dead) + `
 }
 `
-	os.WriteFile(journalFile("op1"), []byte(php), 0o644)
-	os.WriteFile(journalFile("op2"), []byte(`{"containers":["bad"],"vms":[],"snapshots":[],"snap":"","log":"","runner_pid":`+itoa(dead)+`}`), 0o644)
-	journalWrite("live", Journal{Containers: []string{"x"}})
-	notes := journalRecover()
+	os.WriteFile(journalFile(s, "op1"), []byte(php), 0o644)
+	os.WriteFile(journalFile(s, "op2"), []byte(`{"containers":["bad"],"vms":[],"snapshots":[],"snap":"","log":"","runner_pid":`+itoa(dead)+`}`), 0o644)
+	journalWrite(s, "live", Journal{Containers: []string{"x"}})
+	notes := journalRecover(s)
 	if len(notes) != 1 || notes[0].Subject != "Backup interrupted" ||
 		notes[0].Description != "A backup ended unexpectedly; removed its ZFS snapshots, started web, started VM win." {
 		t.Fatalf("notes %+v", notes)
 	}
-	if exists(journalFile("op1")) || !exists(journalFile("live")) {
+	if exists(journalFile(s, "op1")) || !exists(journalFile(s, "live")) {
 		t.Fatal("journal files")
 	}
-	j, _ := jsonRead(journalFile("op2"))
+	j, _ := jsonRead(journalFile(s, "op2"))
 	if toInt(j["attempts"]) != 1 || len(stringList(j["containers"])) != 1 || len(stringList(j["done"])) != 0 {
 		t.Fatalf("op2 journal %v", j)
 	}
@@ -341,12 +342,19 @@ exit 0
 		t.Fatalf("calls %s", c)
 	}
 	j["attempts"] = 29
-	jsonWrite(journalFile("op2"), j, 0o644)
-	notes = journalRecover()
-	if len(notes) != 1 || notes[0].Description != "A backup ended unexpectedly; nothing needed putting back. Could not, after 30 minutes of trying: bad (no such container)" {
+	jsonWrite(journalFile(s, "op2"), j, 0o644)
+	notes = journalRecover(s)
+	if len(notes) != 1 || notes[0].Description != "A backup ended unexpectedly; nothing needed putting back. Could not, after 30 minutes of trying: bad (no such container). It stays listed on the plugin page and is retried every hour." {
 		t.Fatalf("notes %+v", notes)
 	}
-	live, _ := jsonRead(journalFile("live"))
+	if left := journalLeftovers(s); len(left) != 1 || left[0]["id"] != "op2" {
+		t.Fatalf("after 30 attempts the journal stays as a leftover: %v", left)
+	}
+	if n := journalRecover(s); len(n) != 0 {
+		t.Fatalf("it is retried an hour later, not every minute, and notified once: %+v", n)
+	}
+
+	live, _ := jsonRead(journalFile(s, "live"))
 	if toInt(live["runner_pid"]) != os.Getpid() || has(live, "done") || has(live, "ended") {
 		t.Fatalf("live journal %v", live)
 	}
@@ -459,5 +467,102 @@ func TestZfsRealPool(t *testing.T) {
 	exec.Command("zfs", "release", "keep", pool+"/appdata/db@"+snap).Run()
 	if left := zfsDestroy(plan.Datasets, snap, nil); len(left) != 0 {
 		t.Fatalf("left %+v", left)
+	}
+}
+
+func journalTestSetup(t *testing.T, docker string) (Settings, string) {
+	dir := t.TempDir()
+	oldRun, oldZfs, oldDocker, oldVirsh := RunDir, zfsBin, dockerBin, virshBin
+	t.Cleanup(func() { RunDir, zfsBin, dockerBin, virshBin = oldRun, oldZfs, oldDocker, oldVirsh })
+	RunDir = dir + "/ram"
+	calls := filepath.Join(dir, "calls")
+	zfsBin = writeScript(t, dir, "zfs", `echo "zfs $*" >> `+calls+`
+[ "$1" = destroy ] && { echo "cannot open 'gone/appdata': dataset does not exist" >&2; exit 1; }
+[ "$1" = list ] && exit 1
+exit 0
+`)
+	dockerBin = writeScript(t, dir, "docker", `echo "docker $*" >> `+calls+"\n"+docker+"\n")
+	virshBin = writeScript(t, dir, "virsh", `echo "virsh $*" >> `+calls+"\n")
+	s := Settings{DataDir: dir + "/data"}
+	os.MkdirAll(journalDir(s), 0o755)
+	return s, calls
+}
+
+func TestJournalSurvivesARebootInTheDataFolder(t *testing.T) {
+	s, calls := journalTestSetup(t, "exit 0")
+	journalWrite(s, "20261115-030000-abcd", Journal{Containers: []string{"web"}})
+	if !strings.HasPrefix(journalFile(s, "20261115-030000-abcd"), s.DataDir+"/") || !exists(journalFile(s, "20261115-030000-abcd")) {
+		t.Fatal("the journal must live in the data folder, not in RAM")
+	}
+	raw, _ := jsonRead(journalFile(s, "20261115-030000-abcd"))
+	raw["boot"] = "an-earlier-boot"
+	jsonWrite(journalFile(s, "20261115-030000-abcd"), raw, 0o644)
+	journalRecover(s)
+	c, _ := os.ReadFile(calls)
+	if !strings.Contains(string(c), "docker start web") {
+		t.Fatalf("after a reboot the old runner PID means nothing: the container must be started, calls %s", c)
+	}
+}
+
+func TestJournalWaitsForDocker(t *testing.T) {
+	s, calls := journalTestSetup(t, `[ "$1" = info ] && exit 1; exit 0`)
+	jsonWrite(journalFile(s, "20261115-030000-abcd"), M{"containers": []string{"web"}, "vms": []string{}, "snapshots": []string{}, "runner_pid": 999999}, 0o644)
+	for i := 0; i < 40; i++ {
+		journalRecover(s)
+	}
+	c, _ := os.ReadFile(calls)
+	raw, _ := jsonRead(journalFile(s, "20261115-030000-abcd"))
+	if strings.Contains(string(c), "docker start") || toInt(raw["attempts"]) != 0 {
+		t.Fatalf("while Docker is down nothing is tried and nothing counted: calls %s journal %v", c, raw)
+	}
+}
+
+func TestJournalSnapshotOnAPoolThatIsNotImportedIsNotGone(t *testing.T) {
+	s, _ := journalTestSetup(t, "exit 0")
+	jsonWrite(journalFile(s, "20261115-030000-abcd"), M{"containers": []string{}, "vms": []string{}, "snapshots": []string{"gone/appdata"},
+		"snap": "restic-backup-1", "runner_pid": 999999}, 0o644)
+	journalRecover(s)
+	raw, ok := jsonRead(journalFile(s, "20261115-030000-abcd"))
+	if !ok || len(stringList(raw["snapshots"])) != 1 {
+		t.Fatalf("a snapshot whose dataset cannot be seen is not removed: %v", raw)
+	}
+}
+
+func TestLeftoverCanBeDismissed(t *testing.T) {
+	s, _ := journalTestSetup(t, "exit 0")
+	jsonWrite(journalFile(s, "20261115-030000-abcd"), M{"containers": []string{"bad"}, "gave_up": true, "runner_pid": 999999}, 0o644)
+	if left := journalLeftovers(s); len(left) != 1 || strings.Join(left[0]["left"].([]string), ",") != "bad" {
+		t.Fatalf("leftovers %v", left)
+	}
+	if journalDismiss(s, "../config") || !journalDismiss(s, "20261115-030000-abcd") || exists(journalFile(s, "20261115-030000-abcd")) {
+		t.Fatal("dismiss removes exactly the named entry")
+	}
+	jsonWrite(journalFile(s, "20261115-030000-abce"), M{"containers": []string{"web"}, "runner_pid": os.Getpid()}, 0o644)
+	if journalDismiss(s, "20261115-030000-abce") || !exists(journalFile(s, "20261115-030000-abce")) {
+		t.Fatal("the journal of a backup that has not given up is never dismissed")
+	}
+}
+
+func TestGivenUpJournalIsRetriedHourlyAndClearedOnSuccess(t *testing.T) {
+	s, calls := journalTestSetup(t, "exit 0")
+	f := journalFile(s, "20261115-030000-abcd")
+	jsonWrite(f, M{"containers": []string{"web"}, "gave_up": true, "attempts": 30, "next": now() + 3000, "runner_pid": 999999}, 0o644)
+	if n := journalRecover(s); len(n) != 0 {
+		t.Fatalf("no notice: %+v", n)
+	}
+	if c, _ := os.ReadFile(calls); strings.Contains(string(c), "docker start") {
+		t.Fatalf("before the hour is up nothing is tried: %s", c)
+	}
+	raw, _ := jsonRead(f)
+	raw["next"] = now() - 1
+	jsonWrite(f, raw, 0o644)
+	if n := journalRecover(s); len(n) != 0 {
+		t.Fatalf("success after giving up is not notified again: %+v", n)
+	}
+	if c, _ := os.ReadFile(calls); !strings.Contains(string(c), "docker start web") {
+		t.Fatalf("once the hour is up it is tried again: %s", c)
+	}
+	if exists(f) || len(journalLeftovers(s)) != 0 {
+		t.Fatal("a success removes the journal and the warning")
 	}
 }

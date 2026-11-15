@@ -471,14 +471,14 @@ func (r *runner) prepareConsistency(job Job) (bool, func([]string) []string) {
 	opID := r.id()
 	j := Journal{Containers: []string{}, VMs: []string{}, Snapshots: []string{}, Log: str(r.op["log"])}
 	save := func() {
-		journalWrite(opID, j)
+		journalWrite(r.settings, opID, j)
 	}
 	r.onCleanup("clearing the journal", func() error {
 		if len(j.Snapshots) > 0 {
 			j.Ended = true
 			save()
 		} else {
-			journalClear(opID)
+			journalClear(r.settings, opID)
 		}
 		return nil
 	})

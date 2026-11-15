@@ -148,12 +148,12 @@ wait $RUNPID
 check "a snapshot still busy at the end is reported, not forgotten" \
     '[ "$(op_field status)" = warning ] && op_field error | grep -q "tried again every minute"' "$(op_field status) $(op_field error)"
 check "...and left in the journal for the scheduler" \
-    '[ "$(php -r '"'"'foreach (glob($argv[1] . "/*.json") as $f) { if (!empty(json_decode(file_get_contents($f), true)["ended"])) echo "yes"; }'"'"' $T/run/journal)" = yes ]'
+    '[ "$(php -r '"'"'foreach (glob($argv[1] . "/*.json") as $f) { if (!empty(json_decode(file_get_contents($f), true)["ended"])) echo "yes"; }'"'"' $M/data/journal)" = yes ]'
 $SCHED
 check "the scheduler leaves it while it is busy" '[ "$(snapcount_pool)" = 1 ]'
 zfs release rbtest "$held_snap"
 $SCHED
-check "once it is free, the next tick removes it and the journal" '[ "$(snapcount_pool)" = 0 ] && [ -z "$(ls $T/run/journal/ 2>/dev/null)" ]'
+check "once it is free, the next tick removes it and the journal" '[ "$(snapcount_pool)" = 0 ] && [ -z "$(ls $M/data/journal/ 2>/dev/null)" ]'
 check "...noted in the run's log, without a notification" \
     'grep -q "Removed the ZFS snapshot that was still busy" "$(op_field log)" && ! grep -q "left behind" $T/notifications 2>/dev/null'
 docker rm -f rbt-app >/dev/null
@@ -204,10 +204,14 @@ RPID=$!
 wait_phase "Backing up"
 kill -9 $RPID; pkill -9 -f "restic.*backup.*job:j00000002"; wait 2>/dev/null
 check "killed mid-backup, it leaves the container stopped" '! running rbt-app'
+check "...and its journal lies in the data folder, where a reboot does not wipe it" 'ls $M/data/journal/*.json >/dev/null 2>&1'
+RB_DOCKER=/bin/false $SCHED
+check "while Docker does not answer, the tick waits and counts no attempt" \
+    '! running rbt-app && ls $M/data/journal/*.json >/dev/null 2>&1 && ! grep -qE "\"attempts\": *[1-9]" $M/data/journal/*.json'
 $SCHED
 check "the next scheduler tick starts it again" 'running rbt-app'
 check "and says so" 'grep -q "Backup interrupted" $T/notifications'
-check "the journal is gone" '[ -z "$(ls $T/run/journal/ 2>/dev/null)" ]'
+check "the journal is gone" '[ -z "$(ls $M/data/journal/ 2>/dev/null)" ]'
 
 head -c 300000000 /dev/urandom > /mnt/rbtpool/rbshare/big.bin
 mark

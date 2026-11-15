@@ -36,9 +36,6 @@ func touchFile(p string) {
 func cmdTick(args []string) int {
 	os.MkdirAll(RunDir, 0o755)
 	touchFile(RunDir + "/scheduler.tick")
-	for _, n := range journalRecover() {
-		notify(n.Subject, n.Description, "warning", "")
-	}
 	browseReap(false)
 	marker := RunDir + "/config_problem.notified"
 	if p := configProblem(); p != "" {
@@ -58,6 +55,9 @@ func cmdTick(args []string) int {
 	}
 	if prepareDataDir(cfg.Settings) != "" {
 		return 0
+	}
+	for _, n := range journalRecover(cfg.Settings) {
+		notify(n.Subject, n.Description, "warning", "")
 	}
 	reapDeadRuns(cfg)
 	schedulerTick(cfg, now())

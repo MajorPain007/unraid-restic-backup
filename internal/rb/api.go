@@ -13,6 +13,7 @@ import (
 
 func init() {
 	registerAction("overview", apiOverview)
+	registerAction("leftover_dismiss", apiLeftoverDismiss)
 	registerAction("ops", apiOps)
 	registerAction("history", apiHistory)
 	registerAction("op_log", apiOpLog)
@@ -152,6 +153,7 @@ func apiOverview(p M) (M, error) {
 		"system": M{
 			"array_started":  arrayStarted(),
 			"config_problem": configProblem(),
+			"leftovers":      journalLeftovers(s),
 			"restic":         resticVersion(),
 			"server":         serverName(),
 			"data_dir_ok":    isDir(s.DataDir),
@@ -165,6 +167,13 @@ func apiOverview(p M) (M, error) {
 			},
 		},
 	}, nil
+}
+
+func apiLeftoverDismiss(p M) (M, error) {
+	if !journalDismiss(configLoad().Settings, pstr(p, "id", "")) {
+		return nil, apiFail("This entry is already gone.")
+	}
+	return M{}, nil
 }
 
 func apiOps(p M) (M, error) {

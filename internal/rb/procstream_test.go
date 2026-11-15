@@ -55,3 +55,12 @@ func TestAHookThatRunsTooLongIsStopped(t *testing.T) {
 		t.Fatalf("code %d after %s, log %q", code, time.Since(start), b)
 	}
 }
+
+func TestProcStreamKeepsWhatAChildWritesJustAfterTheCommandEnded(t *testing.T) {
+	lines := []string{}
+	code := procStream([]string{"/bin/bash", "-c", "(sleep 0.5; echo 'subprocess ssh: Host key verification failed.' >&2) & exit 1"}, nil,
+		func(stream, line string) { lines = append(lines, stream+":"+line) }, nil, nil, nil)
+	if code != 1 || strings.Join(lines, ",") != "err:subprocess ssh: Host key verification failed." {
+		t.Fatalf("code %d, lines %v", code, lines)
+	}
+}

@@ -41,12 +41,6 @@ export function show(tab: Tab, opts: Record<string, any> = {}): void {
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let lastRunning = '';
-const progressListeners = new Set<(ops: Op[]) => void>();
-
-export function onProgress(fn: (ops: Op[]) => void): () => void {
-  progressListeners.add(fn);
-  return () => progressListeners.delete(fn);
-}
 
 export async function refresh(): Promise<Overview | null> {
   try {
@@ -87,7 +81,6 @@ async function pollRunning(): Promise<void> {
       return;
     }
     if (app.overview) app.overview.running = r.running;
-    progressListeners.forEach((fn) => fn(r.running));
   } catch {
     schedulePoll();
     return;
@@ -109,10 +102,6 @@ export function jobInfo(id: string): JobInfo | null {
 
 export function repoInfo(id: string): RepoInfo | null {
   return app.overview?.repos.find((r) => r.id === id) ?? null;
-}
-
-export function runningOp(match: (op: Op) => boolean): Op | null {
-  return app.overview?.running.find(match) ?? null;
 }
 
 export type ToastKind = 'ok' | 'err' | 'info';

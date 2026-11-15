@@ -1000,7 +1000,6 @@
     color: var(--rb-dim);
 }
 
-#rb-app .rb-ok-text { color: var(--rb-ok); }
 #rb-app .rb-warn-text { color: var(--rb-warn); }
 #rb-app .rb-err-text { color: var(--rb-err); }
 

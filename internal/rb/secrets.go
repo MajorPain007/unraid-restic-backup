@@ -26,10 +26,6 @@ func jsonUnmarshal(b []byte, v any) error {
 	return json.Unmarshal(b, v)
 }
 
-func secretsMode() string {
-	return configLoad().Settings.Secrets
-}
-
 func keyFile(s Settings) string {
 	return s.DataDir + "/.keys/secrets.key"
 }
@@ -118,10 +114,6 @@ func unseal(key, data []byte) ([]byte, error) {
 		return nil, errors.New("damaged secret")
 	}
 	return gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], nil)
-}
-
-func secretFile(repoID, kind string) string {
-	return plainSecretFile(repoID, kind)
 }
 
 func secretRead(repoID, kind string) ([]byte, error) {
@@ -343,7 +335,6 @@ func masterCheck(password string) bool {
 }
 
 type secretItem struct {
-	path  string
 	kind  string
 	repo  string
 	plain []byte

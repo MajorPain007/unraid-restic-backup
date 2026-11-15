@@ -24,7 +24,6 @@ var (
 	Name       = envOr("RB_NAME", buildName)
 	ConfigDir  = envOr("RB_CONFIG_DIR", "/boot/config/plugins/"+Name)
 	RunDir     = envOr("RB_RUN_DIR", "/tmp/"+Name)
-	PluginDir  = envOr("RB_PLUGIN_DIR", "/usr/local/emhttp/plugins/"+Name)
 	ResticBin  = envOr("RB_RESTIC", "/usr/local/lib/"+Name+"/restic")
 	VarIni     = envOr("RB_VAR_INI", "/var/local/emhttp/var.ini")
 	SelfBin    = envOr("RB_BIN", selfPath())
@@ -240,10 +239,6 @@ func dateTime(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-func logAppend(path, line string) {
-	logAppendMax(path, line, 1048576)
-}
-
 func logAppendMax(path, line string, max int64) {
 	os.MkdirAll(filepath.Dir(path), 0o755)
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY|syscall.O_NOFOLLOW, 0o644)
@@ -281,37 +276,6 @@ func logTrim(path string, keep int64) {
 	}
 	f.Truncate(0)
 	f.WriteAt(tail, 0)
-}
-
-func tail(path string, lines int, maxBytes int64) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil {
-		return ""
-	}
-	start := st.Size() - maxBytes
-	if start < 0 {
-		start = 0
-	}
-	buf := make([]byte, st.Size()-start)
-	n, _ := f.ReadAt(buf, start)
-	data := string(buf[:n])
-	if start > 0 {
-		if i := strings.IndexByte(data, '\n'); i >= 0 {
-			data = data[i+1:]
-		} else {
-			data = ""
-		}
-	}
-	all := strings.Split(strings.TrimRight(data, "\n"), "\n")
-	if len(all) > lines {
-		all = all[len(all)-lines:]
-	}
-	return strings.Join(all, "\n")
 }
 
 func mkdirLikeParent(dir string) bool {

@@ -15,7 +15,6 @@ func init() {
 	registerAction("repo_delete", apiRepoDelete)
 	registerAction("repo_password", apiRepoPassword)
 	registerAction("repo_keygen", apiRepoKeygen)
-	registerAction("repo_hostkey", apiRepoHostkey)
 	registerAction("repo_hostkey_trust", apiRepoHostkeyTrust)
 	registerAction("repo_test", apiRepoTest)
 	registerAction("repo_init", apiRepoInit)
@@ -155,7 +154,7 @@ func sshKeygen(repoID string) (string, error) {
 	if !sshKeyStore(repoID, private) {
 		return "", apiFail("The SSH key could not be stored.")
 	}
-	if !fileWrite(sshKeyFile(repoID)+".pub", public, 0o644) {
+	if !fileWrite(sshPlainKey(repoID)+".pub", public, 0o644) {
 		return "", apiFail("The SSH key could not be stored.")
 	}
 	return strings.TrimSpace(string(public)), nil

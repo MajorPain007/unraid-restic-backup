@@ -165,6 +165,3 @@ export function goUp(): void {
   navigate(parentOf(S.path), from);
 }
 
-export function checkedItems(): Entry[] {
-  return Object.values(S.checked);
-}

@@ -355,10 +355,6 @@ func privateDir(dir string) {
 	}
 }
 
-func sshKeyFile(repoID string) string {
-	return SSHDir + "/" + repoID
-}
-
 func knownHostsFile() string {
 	return SSHDir + "/known_hosts"
 }
@@ -788,7 +784,7 @@ type RepoPublic struct {
 }
 
 func repoPublic(r Repo) RepoPublic {
-	pub, _ := os.ReadFile(sshKeyFile(r.ID) + ".pub")
+	pub, _ := os.ReadFile(sshPlainKey(r.ID) + ".pub")
 	return RepoPublic{Repo: r, HasPassword: secretHas(r.ID, "password"), HasRestPassword: secretHas(r.ID, "rest"),
 		SSHPublicKey: string(pub)}
 }

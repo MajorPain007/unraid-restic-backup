@@ -82,6 +82,12 @@ sleep 0.5; kill -9 $! 2>/dev/null; wait 2>/dev/null
 $RUN backup j00000001 manual
 check "a stale lock is removed and the backup goes ahead" '[ "$(op_field status)" = success ]' "$(op_field error)"
 
+$CFG job "{\"id\":\"j00000009\",\"name\":\"Hook\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"hooks\":{\"before\":\"sleep 300 &\"},\"retention\":{\"enabled\":false}}"
+t0=$SECONDS; timeout -s KILL 120 $RUN backup j00000009 manual
+check "a before-hook that leaves a process in the background does not hold the run" '[ "$(op_field status)" = success ] && [ $((SECONDS - t0)) -le 60 ]' "$(op_field status) $((SECONDS - t0)) s"
+pkill -f "sleep 300"
+$CFG job "{\"id\":\"j00000009\",\"name\":\"Hook\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"enabled\":false}"
+
 group "The scheduler"
 $CFG job "{\"id\":\"j00000001\",\"name\":\"Documents\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"schedule\":{\"mode\":\"cron\",\"cron\":\"* * * * *\"},\"retention\":{\"last\":2,\"daily\":0,\"weekly\":0,\"monthly\":0}}"
 n0=$(ls "$T/run/ops/" | grep -c json)
@@ -165,28 +171,31 @@ $RB stop-all 30
 check "stop-all ends a running backup" '[ "$(op_field status)" = cancelled ] && ! pgrep -f "restic-backup run " >/dev/null' "$(op_field status)"
 check "...and removes the decrypted copies from RAM" '[ ! -e $T/run/secrets/r00000001.password ]'
 wait $RPID 2>/dev/null
-h0=$(wc -l < "$M/data/history.jsonl")
+$CFG job "{\"id\":\"j00000001\",\"name\":\"Documents\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"schedule\":{\"mode\":\"off\"},\"retention\":{\"last\":2,\"daily\":0,\"weekly\":0,\"monthly\":0}}"
 : > $T/notifications
 mark
 $RUN backup j00000001 manual &
 RPID=$!
 wait_phase "Backing up"
+KILLED=$(last_op)
 kill -9 $RPID; wait $RPID 2>/dev/null
 pkill -9 -f "restic.*backup.*job:j00000001"
-sleep 0.5
+for _ in $(seq 1 50); do pgrep -f "restic.*backup.*job:j00000001" >/dev/null || break; sleep 0.2; done
 $SCHED
 sleep 1
+kid=$(basename "$KILLED" .json)
 check "the next tick records a killed run as interrupted" \
-    '[ "$(op_field status)" = error ] && op_field error | grep -q interrupted && [ "$(wc -l < $M/data/history.jsonl)" = $((h0 + 1)) ]' \
-    "$(op_field status) $(op_field error) history $(wc -l < $M/data/history.jsonl)"
+    'grep -q "\"status\": *\"error\"" "$KILLED" && grep -q interrupted "$KILLED" && [ "$(grep -c "\"id\":\"$kid\"" $M/data/history.jsonl)" = 1 ]' \
+    "$(grep -o "\"status\": *\"[a-z]*\"" "$KILLED") history $(grep -c "$kid" $M/data/history.jsonl)"
 check "...as the job's last result" \
     'php -r "\$s=json_decode(file_get_contents(\$argv[1]),true); exit(\$s[\"jobs\"][\"j00000001\"][\"last\"][\"status\"]===\"error\" ? 0 : 1);" $M/data/state.json'
 check "...and notifies once" '[ "$(grep -c "interrupted" $T/notifications)" = 1 ]' "$(cat $T/notifications)"
 $SCHED
 sleep 1
 check "a later tick does not record or notify it again" \
-    '[ "$(wc -l < $M/data/history.jsonl)" = $((h0 + 1)) ] && [ "$(grep -c "interrupted" $T/notifications)" = 1 ]'
+    '[ "$(grep -c "\"id\":\"$kid\"" $M/data/history.jsonl)" = 1 ] && [ "$(grep -c "interrupted" $T/notifications)" = 1 ]'
 restic -r "$M/repo" unlock >/dev/null 2>&1
+$CFG job "{\"id\":\"j00000001\",\"name\":\"Documents\",\"repo\":\"r00000001\",\"sources\":[\"$M/src\"],\"schedule\":{\"mode\":\"cron\",\"cron\":\"* * * * *\"},\"retention\":{\"last\":2,\"daily\":0,\"weekly\":0,\"monthly\":0}}"
 rm -f "$M/src/sub/huge.bin"
 $CFG repo "{\"id\":\"r00000001\",\"name\":\"Disk\",\"type\":\"local\",\"local\":{\"path\":\"$M/repo\"}}"
 

@@ -122,6 +122,8 @@ func envList(env map[string]string) []string {
 	return out
 }
 
+var procKillGrace = 30 * time.Second
+
 func procStream(cmdline []string, env map[string]string, onLine func(stream, line string), tick func() bool,
 	onStart func(pid int), stdin *string) int {
 	if len(cmdline) == 0 {
@@ -129,18 +131,30 @@ func procStream(cmdline []string, env map[string]string, onLine func(stream, lin
 	}
 	cmd := exec.Command(cmdline[0], cmdline[1:]...)
 	cmd.Dir = "/"
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if env != nil {
 		cmd.Env = envList(env)
 	}
 	if stdin != nil {
 		cmd.Stdin = strings.NewReader(*stdin)
 	}
-	stdout, err1 := cmd.StdoutPipe()
-	stderr, err2 := cmd.StderrPipe()
-	if err1 != nil || err2 != nil {
+	outR, outW, err1 := os.Pipe()
+	if err1 != nil {
 		return -1
 	}
-	if err := cmd.Start(); err != nil {
+	errR, errW, err2 := os.Pipe()
+	if err2 != nil {
+		outR.Close()
+		outW.Close()
+		return -1
+	}
+	cmd.Stdout, cmd.Stderr = outW, errW
+	err := cmd.Start()
+	outW.Close()
+	errW.Close()
+	if err != nil {
+		outR.Close()
+		errR.Close()
 		return -1
 	}
 	if onStart != nil {
@@ -163,48 +177,64 @@ func procStream(cmdline []string, env map[string]string, onLine func(stream, lin
 		}
 	}
 	wg.Add(2)
-	go read(stdout, "out")
-	go read(stderr, "err")
+	go read(outR, "out")
+	go read(errR, "err")
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(done)
 	}()
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
-	interrupted := false
-	for {
+	var waitErr error
+	var drain, kill <-chan time.Time
+	gone, readDone, interrupted := false, false, false
+	for !gone || !readDone {
 		select {
 		case m := <-lines:
 			onLine(m.stream, m.line)
 		case <-ticker.C:
-			if tick != nil && !interrupted && tick() {
+			if tick != nil && !interrupted && !gone && tick() {
 				interrupted = true
 				cmd.Process.Signal(syscall.SIGINT)
+				kill = time.After(procKillGrace)
 			}
+		case <-kill:
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		case waitErr = <-exited:
+			gone = true
+			drain = time.After(2 * time.Second)
+		case <-drain:
+			outR.Close()
+			errR.Close()
 		case <-done:
-		drain:
-			for {
-				select {
-				case m := <-lines:
-					onLine(m.stream, m.line)
-				default:
-					break drain
-				}
-			}
-			err := cmd.Wait()
-			if err == nil {
-				return 0
-			}
-			if ee, ok := err.(*exec.ExitError); ok {
-				if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-					return 128 + int(ws.Signal())
-				}
-				return ee.ExitCode()
-			}
-			return -1
+			readDone = true
+			done = nil
 		}
 	}
+	for {
+		select {
+		case m := <-lines:
+			onLine(m.stream, m.line)
+			continue
+		default:
+		}
+		break
+	}
+	outR.Close()
+	errR.Close()
+	if waitErr == nil {
+		return 0
+	}
+	if ee, ok := waitErr.(*exec.ExitError); ok {
+		if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			return 128 + int(ws.Signal())
+		}
+		return ee.ExitCode()
+	}
+	return -1
 }
 
 func resticCapture(r Repo, s Settings, args []string, limitLines int) (int, []string, []string) {

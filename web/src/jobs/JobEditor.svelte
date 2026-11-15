@@ -356,7 +356,7 @@
     <div class="rb-form-section">
       {@render head('commands', 'Commands', 'terminal')}
       <div class="rb-fields">
-        <Field label="Before the backup" wide optional hint="Runs as root with bash. If it fails, nothing is backed up.">
+        <Field label="Before the backup" wide optional hint="Runs as root with bash, for at most one hour. If it fails, nothing is backed up.">
           <textarea
             rows="3"
             spellcheck="false"
@@ -364,7 +364,7 @@
             bind:value={job.hooks.before}
           ></textarea>
         </Field>
-        <Field label="After the backup" wide optional hint="Also after a failed backup. Variables: RB_JOB_NAME, RB_STATUS, RB_SNAPSHOT, RB_LOG.">
+        <Field label="After the backup" wide optional hint="Also after a failed backup, for at most one hour. Variables: RB_JOB_NAME, RB_STATUS, RB_SNAPSHOT, RB_LOG.">
           <textarea
             rows="3"
             spellcheck="false"

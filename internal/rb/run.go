@@ -430,15 +430,25 @@ func (r *runner) preflight() string {
 	return repoReachable(r.repo, 3, 20, r.cancelled, r.log)
 }
 
+var hookTimeout = time.Hour
+
 func (r *runner) runHook(name, script string, env map[string]string) int {
 	r.phase("Running the " + name + " command")
 	full := map[string]string{"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME": "/root"}
 	for k, v := range env {
 		full[k] = v
 	}
+	deadline := time.Now().Add(hookTimeout)
+	late := false
 	code := procStream([]string{"/bin/bash", "-c", script}, full, func(stream, line string) {
 		r.log("[" + stream + "] " + line)
-	}, r.cancelled, nil, nil)
+	}, func() bool {
+		late = late || time.Now().After(deadline)
+		return late || r.cancelled()
+	}, nil, nil)
+	if late {
+		r.log(name + " command was stopped after " + humanDuration(hookTimeout.Seconds()))
+	}
 	r.log(name + " command exited with " + strconv.Itoa(code))
 	return code
 }

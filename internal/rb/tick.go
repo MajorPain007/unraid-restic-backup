@@ -40,6 +40,15 @@ func cmdTick(args []string) int {
 		notify(n.Subject, n.Description, "warning", "")
 	}
 	browseReap(false)
+	marker := RunDir + "/config_problem.notified"
+	if p := configProblem(); p != "" {
+		if !exists(marker) {
+			notify("Restic Backup cannot read its settings", p, "alert", "")
+			touchFile(marker)
+		}
+		return 0
+	}
+	os.Remove(marker)
 	if !arrayStarted() {
 		return 0
 	}

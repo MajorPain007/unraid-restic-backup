@@ -2,6 +2,8 @@ package rb
 
 import (
 	"crypto/rand"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/url"
@@ -228,6 +230,25 @@ func (c *Config) repoIDs() []string {
 		ids = append(ids, r.ID)
 	}
 	return ids
+}
+
+func configProblem() string {
+	b, err := os.ReadFile(ConfigFile)
+	if os.IsNotExist(err) {
+		return ""
+	}
+	if err != nil {
+		return fmt.Sprintf("The settings file %s cannot be read (%v). No backup runs and nothing is saved over it until it can be read: check the flash drive and the file's permissions.", ConfigFile, err)
+	}
+	var m M
+	err = json.Unmarshal(b, &m)
+	if err == nil && m == nil {
+		err = errors.New("it holds no settings")
+	}
+	if err != nil {
+		return fmt.Sprintf("The settings file %s cannot be read (%v). No backup runs and nothing is saved over it until it is fixed: restore it from a flash backup, or remove it to start with empty settings.", ConfigFile, err)
+	}
+	return ""
 }
 
 func configSave(cfg *Config) bool {

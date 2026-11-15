@@ -96,6 +96,9 @@
     </div>
   </div>
 
+  {#if o.system.config_problem}
+    <div class="rb-card-note err rb-banner"><Icon name="alert" /><div>{o.system.config_problem}</div></div>
+  {/if}
   {#if !o.system.array_started}
     <div class="rb-card-note warn rb-banner"><Icon name="power" /><div>The array is stopped. Backups wait until it is started; missed ones run then.</div></div>
   {/if}

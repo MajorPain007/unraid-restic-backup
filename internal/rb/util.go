@@ -102,7 +102,18 @@ func fileWrite(path string, data []byte, mode os.FileMode) bool {
 		}
 	}
 	tmp := fmt.Sprintf("%s.tmp%d", path, os.Getpid())
-	if err := os.WriteFile(tmp, data, mode); err != nil {
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return false
+	}
+	_, err = f.Write(data)
+	if serr := f.Sync(); err == nil {
+		err = serr
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
 		os.Remove(tmp)
 		return false
 	}

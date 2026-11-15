@@ -151,6 +151,7 @@ func apiOverview(p M) (M, error) {
 		"recent":  historyRead(s, M{}, 15),
 		"system": M{
 			"array_started":  arrayStarted(),
+			"config_problem": configProblem(),
 			"restic":         resticVersion(),
 			"server":         serverName(),
 			"data_dir_ok":    isDir(s.DataDir),

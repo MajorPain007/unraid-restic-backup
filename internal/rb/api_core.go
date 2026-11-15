@@ -242,6 +242,9 @@ func apiRestic(cfg *Config, r *Repo, args []string, limitLines int) ([]string, e
 func configChange(fn func(cfg *Config) (M, error)) (M, error) {
 	l := configLock()
 	defer l.Unlock()
+	if p := configProblem(); p != "" {
+		return nil, apiFail(p)
+	}
 	cfg := configLoad()
 	result, err := fn(cfg)
 	if err != nil {
@@ -257,6 +260,10 @@ func testCfg(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "unknown command")
 		return 2
+	}
+	if p := configProblem(); p != "" {
+		fmt.Fprintln(os.Stderr, p)
+		return 1
 	}
 	cfg := configLoad()
 	var errs []string

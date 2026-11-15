@@ -46,6 +46,26 @@ for e in src/event/*; do
 done
 echo "  PASS event hooks parse"
 
+section "No comments in PHP and shell"
+found=""
+if command -v php >/dev/null 2>&1; then
+    while IFS= read -r f; do
+        found="$found$(php -r 'foreach (token_get_all(file_get_contents($argv[1])) as $t) { if (!is_array($t)) continue; if ($t[0] === T_COMMENT || $t[0] === T_DOC_COMMENT || ($t[0] === T_INLINE_HTML && preg_match("~/\*|<!--~", $t[1]))) echo $argv[1], ":", $t[2], "\n"; }' "$f")"
+    done < <(find src tests -name '*.php' -o -name '*.page' | sort)
+else
+    echo "  SKIP php not installed, PHP files not checked"
+fi
+while IFS= read -r f; do
+    found="$found$(awk -v f="$f" 'NR > 1 && /^[[:space:]]*#/ && !/^[[:space:]]*#!/ { print f ":" NR }' "$f")"
+done < <(find scripts tests src/event -type f \( -name '*.sh' -o -path 'src/event/*' \) | sort)
+if [ -n "$found" ]; then
+    echo "  FAIL comments found:"
+    echo "$found" | sed 's/^/    /'
+    fail=1
+else
+    echo "  PASS no comments in PHP and shell"
+fi
+
 echo
 [ "$fail" = 0 ] && printf '\033[32mAll passed\033[0m\n' || printf '\033[31mSomething failed\033[0m\n'
 exit "$fail"

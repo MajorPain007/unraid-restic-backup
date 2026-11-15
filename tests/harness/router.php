@@ -100,7 +100,6 @@ $real = is_file(__DIR__ . '/.unraid/default-base.css');
   #header a.on { opacity: 1; border-bottom: 2px solid #ff8c2f; }
   #displaybox { padding: 20px 28px; }
   .title { font-size: 1.6rem; text-transform: uppercase; letter-spacing: .1em; margin: 0 0 18px; padding-bottom: 8px; border-bottom: 1px solid <?=$t[3]?>; }
-  /* Unraid's global control styles, roughly as its themes set them. */
   input[type=button], input[type=submit], button, a.button {
     font-family: clear-sans, sans-serif; font-size: 1.1rem; font-weight: bold; letter-spacing: 1.8px;
     text-transform: uppercase; min-width: 86px; margin: 10px 12px 10px 0; padding: 8px; border: 0; border-radius: 4px;

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -168,6 +169,32 @@ func historyAppend(s Settings, record M) bool {
 		historyCompact(s)
 	}
 	return err == nil
+}
+
+func logsPrune(s Settings) {
+	files, _ := filepath.Glob(s.DataDir + "/logs/*.log")
+	if len(files) == 0 {
+		return
+	}
+	if _, err := os.ReadFile(historyFile(s)); err != nil && !os.IsNotExist(err) {
+		return
+	}
+	known := map[string]bool{}
+	for _, h := range historyRead(s, M{}, math.MaxInt) {
+		known[str(h["id"])] = true
+	}
+	cut := time.Now().AddDate(0, 0, -s.HistoryDays)
+	settled := time.Now().Add(-time.Hour)
+	for _, f := range files {
+		id := strings.TrimSuffix(filepath.Base(f), ".log")
+		st, err := os.Lstat(f)
+		if err != nil {
+			continue
+		}
+		if st.ModTime().Before(cut) || (!known[id] && st.ModTime().Before(settled) && str(opRead(id)["status"]) != "running") {
+			os.Remove(f)
+		}
+	}
 }
 
 func historyCompact(s Settings) {

@@ -249,6 +249,7 @@ func (r *runner) finish(status, errMsg string, summary any) {
 		}
 	}
 	historyAppend(r.settings, record)
+	logsPrune(r.settings)
 
 	op := r.op
 	jobID := str(op["job"])

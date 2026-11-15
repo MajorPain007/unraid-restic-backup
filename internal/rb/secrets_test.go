@@ -55,7 +55,7 @@ func TestSecretsSwitchModes(t *testing.T) {
 		t.Fatal("plain mode should keep the password readable")
 	}
 
-	if err := secretsSwitch(cfg, "key", ""); err != nil {
+	if err := switchSecrets(cfg, "key", ""); err != nil {
 		t.Fatal(err)
 	}
 	saveMode(t, cfg, "key")
@@ -84,10 +84,10 @@ func TestSecretsSwitchModes(t *testing.T) {
 	}
 	os.Rename(base+"/pool-gone", base+"/pool")
 
-	if err := secretsSwitch(cfg, "master", "short"); err == nil {
+	if err := switchSecrets(cfg, "master", "short"); err == nil {
 		t.Fatal("a short master password must be refused")
 	}
-	if err := secretsSwitch(cfg, "master", "correct horse battery"); err != nil {
+	if err := switchSecrets(cfg, "master", "correct horse battery"); err != nil {
 		t.Fatal(err)
 	}
 	saveMode(t, cfg, "master")
@@ -114,7 +114,7 @@ func TestSecretsSwitchModes(t *testing.T) {
 		t.Fatal("unlock did not work")
 	}
 
-	if err := secretsSwitch(cfg, "plain", ""); err != nil {
+	if err := switchSecrets(cfg, "plain", ""); err != nil {
 		t.Fatal(err)
 	}
 	saveMode(t, cfg, "plain")
@@ -125,4 +125,12 @@ func TestSecretsSwitchModes(t *testing.T) {
 	if string(k) != "PRIVATE KEY 456\n" || !strings.HasPrefix(sshKeyPath("r00000001"), SSHDir) {
 		t.Fatal("ssh key back in plain text on the flash drive")
 	}
+}
+
+func switchSecrets(cfg *Config, mode, password string) error {
+	then, err := secretsSwitch(cfg, mode, password)
+	if err == nil {
+		then(true)
+	}
+	return err
 }

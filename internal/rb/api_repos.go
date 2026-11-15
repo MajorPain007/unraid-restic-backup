@@ -95,10 +95,10 @@ func apiRepoSave(p M) (M, error) {
 func apiRepoDelete(p M) (M, error) {
 	id := pstr(p, "id", "")
 	browseStop(id, 20)
-	return configChange(func(cfg *Config) (M, error) {
+	return configChangeThen(func(cfg *Config) (M, func(bool), error) {
 		repo, err := needRepo(cfg, id)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		users := []string{}
 		for _, job := range cfg.Jobs {
@@ -107,16 +107,19 @@ func apiRepoDelete(p M) (M, error) {
 			}
 		}
 		if len(users) > 0 {
-			return nil, apiFail("Jobs still back up to this repository: " + strings.Join(users, ", ") + ". Delete them or point them elsewhere first.")
+			return nil, nil, apiFail("Jobs still back up to this repository: " + strings.Join(users, ", ") + ". Delete them or point them elsewhere first.")
 		}
 		if repoBusy(id) {
-			return nil, apiFail("An operation on this repository is running.")
+			return nil, nil, apiFail("An operation on this repository is running.")
 		}
 		i := cfg.repoIndex(id)
 		cfg.Repos = append(cfg.Repos[:i], cfg.Repos[i+1:]...)
-		secretRemove(id)
-		os.Remove(cacheDir() + "/snapshots-" + id + ".json")
-		return M{"deleted": repo.Name}, nil
+		return M{"deleted": repo.Name}, func(saved bool) {
+			if saved {
+				secretRemove(id)
+				os.Remove(cacheDir() + "/snapshots-" + id + ".json")
+			}
+		}, nil
 	})
 }
 

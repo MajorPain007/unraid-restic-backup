@@ -313,14 +313,12 @@ func masterLock() {
 	os.Remove(unlockedKeyFile())
 }
 
-func masterStore(password string, dek []byte) bool {
+func masterRecordFor(password string, dek []byte) masterRecord {
 	salt := make([]byte, 16)
 	rand.Read(salt)
 	kek := deriveKEK(password, salt, masterIterRound)
-	rec := masterRecord{Salt: base64.StdEncoding.EncodeToString(salt), Iterations: masterIterRound,
+	return masterRecord{Salt: base64.StdEncoding.EncodeToString(salt), Iterations: masterIterRound,
 		Key: strings.TrimSpace(string(seal(kek, dek)))}
-	privateDir(SecretsDir)
-	return jsonWrite(masterFile(), rec, 0o600)
 }
 
 func masterCheck(password string) bool {
@@ -376,22 +374,36 @@ func collectSecrets(cfg *Config) ([]secretItem, error) {
 	return items, nil
 }
 
-func secretsSwitch(cfg *Config, mode, password string) error {
+func secretsSwitch(cfg *Config, mode, password string) (func(saved bool), error) {
+	staged := []string{}
+	stage := func(path string, data []byte) bool {
+		if !fileWrite(path+".new", data, 0o600) {
+			return false
+		}
+		staged = append(staged, path)
+		return true
+	}
+	fail := func(msg string) (func(bool), error) {
+		for _, p := range staged {
+			os.Remove(p + ".new")
+		}
+		return nil, errors.New(msg)
+	}
 	cur := cfg.Settings
 	if cur.Secrets == mode && mode != "master" {
-		return nil
+		return func(bool) {}, nil
 	}
 	if cur.Secrets == "master" && secretsLocked() {
-		return errors.New("Unlock the passwords with the master password first.")
+		return fail("Unlock the passwords with the master password first.")
 	}
 	if cur.Secrets == "key" {
 		if _, err := dataKey(cur); err != nil {
-			return errors.New("The current key is not readable: " + err.Error())
+			return fail("The current key is not readable: " + err.Error())
 		}
 	}
 	items, err := collectSecrets(cfg)
 	if err != nil {
-		return errors.New("A secret could not be read: " + err.Error())
+		return fail("A secret could not be read: " + err.Error())
 	}
 	next := cur
 	next.Secrets = mode
@@ -399,76 +411,89 @@ func secretsSwitch(cfg *Config, mode, password string) error {
 	switch mode {
 	case "key":
 		if ok, why := encryptedStorage(next.DataDir); !ok {
-			return errors.New("The data folder is not on encrypted storage (" + why + "), so a key kept there would protect nothing.")
+			return fail("The data folder is not on encrypted storage (" + why + "), so a key kept there would protect nothing.")
 		}
 		dek = make([]byte, 32)
 		rand.Read(dek)
 		dir := filepath.Dir(keyFile(next))
 		os.MkdirAll(dir, 0o700)
 		os.Chmod(dir, 0o700)
-		if !fileWrite(keyFile(next), []byte(base64.StdEncoding.EncodeToString(dek)+"\n"), 0o600) {
-			return errors.New("The key could not be written to " + keyFile(next) + ".")
+		if !stage(keyFile(next), []byte(base64.StdEncoding.EncodeToString(dek)+"\n")) {
+			return fail("The key could not be written to " + keyFile(next) + ".")
 		}
 	case "master":
 		if len(password) < 8 {
-			return errors.New("The master password needs at least 8 characters.")
+			return fail("The master password needs at least 8 characters.")
 		}
 		dek = make([]byte, 32)
 		rand.Read(dek)
-		if !masterStore(password, dek) {
-			return errors.New("The master password could not be stored.")
+		privateDir(SecretsDir)
+		if !jsonWrite(masterFile()+".new", masterRecordFor(password, dek), 0o600) {
+			return fail("The master password could not be stored.")
 		}
+		staged = append(staged, masterFile())
 		os.MkdirAll(runSecretsDir(), 0o700)
-		fileWrite(unlockedKeyFile(), []byte(base64.StdEncoding.EncodeToString(dek)+"\n"), 0o600)
+		stage(unlockedKeyFile(), []byte(base64.StdEncoding.EncodeToString(dek)+"\n"))
 	}
 	for _, it := range items {
 		if mode == "plain" {
 			if it.kind == "ssh" {
-				if !fileWrite(sshPlainKey(it.repo), it.plain, 0o600) {
-					return errors.New("Writing a key failed.")
+				if !stage(sshPlainKey(it.repo), it.plain) {
+					return fail("Writing a key failed.")
 				}
 				continue
 			}
-			if !fileWrite(plainSecretFile(it.repo, it.kind), it.plain, 0o600) {
-				return errors.New("Writing a password failed.")
+			if !stage(plainSecretFile(it.repo, it.kind), it.plain) {
+				return fail("Writing a password failed.")
 			}
 			continue
 		}
 		enc := seal(dek, it.plain)
 		if it.kind == "ssh" {
-			if !fileWrite(sshEncKey(it.repo), enc, 0o600) {
-				return errors.New("Writing a key failed.")
+			if !stage(sshEncKey(it.repo), enc) {
+				return fail("Writing a key failed.")
 			}
 			continue
 		}
-		if !fileWrite(encSecretFile(it.repo, it.kind), enc, 0o600) {
-			return errors.New("Writing a password failed.")
+		if !stage(encSecretFile(it.repo, it.kind), enc) {
+			return fail("Writing a password failed.")
 		}
 	}
-	for _, it := range items {
-		if mode == "plain" {
+	return func(saved bool) {
+		if !saved {
+			for _, p := range staged {
+				os.Remove(p + ".new")
+			}
+			wipeRunSecrets()
+			return
+		}
+		for _, p := range staged {
+			os.Rename(p+".new", p)
+		}
+		for _, it := range items {
+			if mode == "plain" {
+				if it.kind == "ssh" {
+					os.Remove(sshEncKey(it.repo))
+				} else {
+					os.Remove(encSecretFile(it.repo, it.kind))
+				}
+				continue
+			}
 			if it.kind == "ssh" {
-				os.Remove(sshEncKey(it.repo))
+				shred(sshPlainKey(it.repo))
 			} else {
-				os.Remove(encSecretFile(it.repo, it.kind))
+				shred(plainSecretFile(it.repo, it.kind))
 			}
-			continue
 		}
-		if it.kind == "ssh" {
-			shred(sshPlainKey(it.repo))
-		} else {
-			shred(plainSecretFile(it.repo, it.kind))
+		wipeRunSecrets()
+		if cur.Secrets == "key" && mode != "key" {
+			shred(keyFile(cur))
 		}
-	}
-	wipeRunSecrets()
-	if cur.Secrets == "key" && mode != "key" {
-		shred(keyFile(cur))
-	}
-	if cur.Secrets == "master" && mode != "master" {
-		os.Remove(masterFile())
-		masterLock()
-	}
-	return nil
+		if cur.Secrets == "master" && mode != "master" {
+			os.Remove(masterFile())
+			masterLock()
+		}
+	}, nil
 }
 
 func shred(path string) {

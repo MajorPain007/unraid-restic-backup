@@ -240,17 +240,31 @@ func apiRestic(cfg *Config, r *Repo, args []string, limitLines int) ([]string, e
 }
 
 func configChange(fn func(cfg *Config) (M, error)) (M, error) {
+	return configChangeThen(func(cfg *Config) (M, func(bool), error) {
+		r, err := fn(cfg)
+		return r, nil, err
+	})
+}
+
+func configChangeThen(fn func(cfg *Config) (M, func(saved bool), error)) (M, error) {
 	l := configLock()
 	defer l.Unlock()
 	if p := configProblem(); p != "" {
 		return nil, apiFail(p)
 	}
 	cfg := configLoad()
-	result, err := fn(cfg)
+	result, then, err := fn(cfg)
 	if err != nil {
 		return nil, err
 	}
-	if !configSave(cfg) {
+	saved := configSave(cfg)
+	if then != nil {
+		then(saved)
+	}
+	if !saved && then != nil {
+		return nil, apiFail("The settings could not be saved to the flash drive. Nothing was changed.")
+	}
+	if !saved {
 		return nil, apiFail("The settings could not be saved to the flash drive.")
 	}
 	return result, nil

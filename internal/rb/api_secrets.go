@@ -31,23 +31,24 @@ func apiSecretsMode(p M) (M, error) {
 	if r := opsRunning(); len(r) > 0 {
 		return nil, apiFail("Wait until the running operations have finished.")
 	}
-	return configChange(func(cfg *Config) (M, error) {
+	return configChangeThen(func(cfg *Config) (M, func(bool), error) {
 		if cfg.Settings.Secrets == "master" && mode != "master" || cfg.Settings.Secrets == "master" && password != "" {
 			if !masterCheck(current) {
-				return nil, apiFail("The current master password is wrong.")
+				return nil, nil, apiFail("The current master password is wrong.")
 			}
 		}
 		if mode == "master" && password != pstr(p, "password_repeat", password) {
-			return nil, apiFail("The two master passwords differ.")
+			return nil, nil, apiFail("The two master passwords differ.")
 		}
 		for _, r := range cfg.Repos {
 			browseStop(r.ID, 20)
 		}
-		if err := secretsSwitch(cfg, mode, password); err != nil {
-			return nil, apiFail(err.Error())
+		then, err := secretsSwitch(cfg, mode, password)
+		if err != nil {
+			return nil, nil, apiFail(err.Error())
 		}
 		cfg.Settings.Secrets = mode
-		return M{"mode": mode}, nil
+		return M{"mode": mode}, then, nil
 	})
 }
 

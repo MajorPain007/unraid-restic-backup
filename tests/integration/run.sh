@@ -171,9 +171,8 @@ mark
 $RUN backup j00000001 manual &
 RPID=$!
 wait_phase "Backing up"
-CPID=$(op_field pid)
 kill -9 $RPID; wait $RPID 2>/dev/null
-[ "$CPID" -gt 0 ] 2>/dev/null && kill -9 "$CPID" 2>/dev/null
+pkill -9 -f "restic.*backup.*job:j00000001"
 sleep 0.5
 $SCHED
 sleep 1

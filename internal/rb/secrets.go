@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -406,6 +407,9 @@ func secretsSwitch(cfg *Config, mode, password string) (func(saved bool), error)
 		}
 		dek = make([]byte, 32)
 		rand.Read(dek)
+		if why := prepareDataDir(next); why != "" {
+			return fail(why)
+		}
 		dir := filepath.Dir(keyFile(next))
 		os.MkdirAll(dir, 0o700)
 		os.Chmod(dir, 0o700)
@@ -488,8 +492,11 @@ func secretsSwitch(cfg *Config, mode, password string) (func(saved bool), error)
 }
 
 func shred(path string) {
-	if st, err := os.Stat(path); err == nil && st.Mode().IsRegular() {
-		os.WriteFile(path, make([]byte, st.Size()), 0o600)
+	if f, err := os.OpenFile(path, os.O_WRONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0); err == nil {
+		if st, err := f.Stat(); err == nil && st.Mode().IsRegular() {
+			f.Write(make([]byte, st.Size()))
+		}
+		f.Close()
 	}
 	os.Remove(path)
 }

@@ -350,8 +350,9 @@ func privateDir(dir string) {
 	if !isDir(dir) {
 		os.MkdirAll(dir, 0o700)
 	}
-	if !isFile(dir + "/.gitignore") {
-		os.WriteFile(dir+"/.gitignore", []byte("*\n"), 0o600)
+	if f, err := os.OpenFile(dir+"/.gitignore", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); err == nil {
+		f.WriteString("*\n")
+		f.Close()
 	}
 }
 

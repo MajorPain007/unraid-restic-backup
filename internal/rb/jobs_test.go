@@ -79,3 +79,39 @@ func TestJobForgetArgs(t *testing.T) {
 	eqList(t, []string{"forget", "--json", "--tag", "job:j00000001", "--group-by", "", "--keep-daily", "7",
 		"--keep-weekly", "4", "--keep-within", "1y", "--retry-lock", "2m"}, forgetArgs(job, false))
 }
+
+func TestJobBackupArgsOptions(t *testing.T) {
+	tmp := t.TempDir() + "/op"
+	job := testJob([]string{"/mnt/user/docs"})
+	eqList(t, []string{"backup", "--json", "--host", "Tower", "--tag", "job:j00000001", "--group-by", "host,tags",
+		"--exclude-file", tmp + ".exclude", "--retry-lock", "2m", "--", "/mnt/user/docs"}, backupArgs(job, testRepo("sftp", ""), testSettings, tmp))
+	job.Tags = []string{"t1"}
+	job.IExcludes = []string{"*.ISO"}
+	job.ExcludeCaches = true
+	job.ExcludeLargerThan = "2G"
+	job.OneFileSystem = true
+	job.Advanced.ReadConcurrency = 4
+	job.Advanced.SkipIfUnchanged = true
+	job.Advanced.ExtraFlags = []string{"--no-scan"}
+	eqList(t, []string{"backup", "--json", "--host", "Tower", "--tag", "job:j00000001", "--group-by", "host,tags", "--tag", "t1",
+		"--exclude-file", tmp + ".exclude", "--iexclude-file", tmp + ".iexclude", "--exclude-caches", "--exclude-larger-than", "2G",
+		"--one-file-system", "--read-concurrency", "4", "--skip-if-unchanged", "--no-scan", "--retry-lock", "2m", "--", "/mnt/user/docs"},
+		backupArgs(job, testRepo("sftp", ""), testSettings, tmp))
+	if b, _ := os.ReadFile(tmp + ".iexclude"); string(b) != "*.ISO\n" {
+		t.Errorf("iexclude file: %q", b)
+	}
+}
+
+func TestJobHostPrecedence(t *testing.T) {
+	job := testJob(nil)
+	if h := jobHost(job, Settings{Host: "Server"}); h != "Tower" {
+		t.Errorf("the job's host wins: %q", h)
+	}
+	job.Advanced.Host = ""
+	if h := jobHost(job, Settings{Host: "Server"}); h != "Server" {
+		t.Errorf("then the global host: %q", h)
+	}
+	if h := jobHost(job, Settings{}); h != serverName() {
+		t.Errorf("then the server name: %q", h)
+	}
+}

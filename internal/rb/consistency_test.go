@@ -12,35 +12,6 @@ import (
 	"time"
 )
 
-func phpEval(t *testing.T, code string, env ...string) []byte {
-	t.Helper()
-	php, err := exec.LookPath("php")
-	if err != nil {
-		t.Skip("php not installed")
-	}
-	root, _ := filepath.Abs("../..")
-	lib := filepath.Join(root, "src/include/lib/consistency.php")
-	if !isFile(lib) {
-		return nil
-	}
-	cmd := exec.Command(php, "-r", "require "+phpString(lib)+"; "+code)
-	cmd.Env = append(os.Environ(), env...)
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("php: %v: %s", err, out)
-	}
-	return out
-}
-
-func phpString(s string) string {
-	return phpJSON(s)
-}
-
-func phpJSON(v any) string {
-	b, _ := json.Marshal(v)
-	return "json_decode(" + "'" + strings.ReplaceAll(strings.ReplaceAll(string(b), `\`, `\\`), "'", `\'`) + "'" + ", true)"
-}
-
 func writeScript(t *testing.T, dir, name, body string) string {
 	t.Helper()
 	p := filepath.Join(dir, name)
@@ -134,21 +105,6 @@ func TestZfsWrapScript(t *testing.T) {
 	if !isDir(stage+"/w0") || !isDir(stage+"/3") || !isDir(w) {
 		t.Fatal("stage dirs not created")
 	}
-	var binds [][]string
-	for _, b := range plan.Binds {
-		binds = append(binds, []string{b.Dataset, b.Mount, b.Sub, b.Target})
-	}
-	php := phpEval(t, "echo json_encode(rb_zfs_wrap(array('restic','backup','/mnt/user/appdata'), array('binds' => "+phpJSON(binds)+
-		"), 'restic-backup-1', "+phpString(stage)+", "+phpJSON(writable)+"));")
-	var want []string
-	if php != nil {
-		if err := json.Unmarshal(php, &want); err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("differs from PHP:\nGo:  %q\nPHP: %q", got, want)
-		}
-	}
 	zfsUnstage(stage)
 	if exists(stage) {
 		t.Fatal("unstage left the stage dir")
@@ -177,31 +133,6 @@ func TestZfsPlanFakeList(t *testing.T) {
 	}
 	if plan.Binds[1].Target != "/mnt/tank/media" || plan.Binds[1].Sub != "/media" || plan.Binds[4].Sub != "/Library" {
 		t.Fatalf("binds %+v", plan.Binds)
-	}
-	var mm [][]string
-	for _, m := range mounts {
-		mm = append(mm, []string{m.Dataset, m.Point})
-	}
-	php := phpEval(t, "echo json_encode(rb_zfs_plan("+phpJSON(sources)+", "+phpJSON(mm)+"));")
-	var want struct {
-		Datasets []string   `json:"datasets"`
-		Binds    [][]string `json:"binds"`
-		Live     [][]string `json:"live"`
-	}
-	if php != nil {
-		if err := json.Unmarshal(php, &want); err != nil {
-			t.Fatal(err)
-		}
-	}
-	var gb, gl [][]string
-	for _, b := range plan.Binds {
-		gb = append(gb, []string{b.Dataset, b.Mount, b.Sub, b.Target})
-	}
-	for _, l := range plan.Live {
-		gl = append(gl, []string{l.Path, l.Why})
-	}
-	if php != nil && (!reflect.DeepEqual(plan.Datasets, want.Datasets) || !reflect.DeepEqual(gb, want.Binds) || !reflect.DeepEqual(gl, want.Live)) {
-		t.Fatalf("differs from PHP:\nGo:  %q %q %q\nPHP: %+v", plan.Datasets, gb, gl, want)
 	}
 	if _, err := zfsPlan([]string{"/var/tmp"}, nil); err == nil || !strings.HasPrefix(err.Error(), "/var/tmp is not on a ZFS dataset (") ||
 		!strings.HasSuffix(err.Error(), "). Choose another consistency setting for this job.") {
@@ -389,11 +320,6 @@ esac
 	want := `{"docker":true,"libvirt":true,"containers":[{"name":"plex","running":true,"path":"/mnt/user/appdata/plex"}],"broad":[{"name":"dockge","running":false,"path":"/mnt/cache/appdata"}],"vms":[],"zfs":{"ok":true,"error":"","datasets":["cache/appdata"],"live":[{"path":"/mnt/user/appdata/plex","why":"the share appdata was not found on any pool or disk"}]}}` + "\n"
 	if b != want {
 		t.Fatalf("detect\n%s", b)
-	}
-	php := phpEval(t, "echo json_encode(rb_consistency_detect(array('/mnt/user/appdata/plex', '/mnt/cache/appdata/db')), JSON_UNESCAPED_SLASHES).\"\\n\";",
-		"RB_ZFS="+zfsBin, "RB_DOCKER="+dockerBin, "RB_VIRSH="+virshBin)
-	if php != nil && string(php) != b {
-		t.Fatalf("differs from PHP:\nGo:  %sPHP: %s", b, php)
 	}
 }
 

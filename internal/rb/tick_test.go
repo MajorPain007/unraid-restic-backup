@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -274,5 +275,100 @@ func TestNoBackupStartsWhileARestoreRuns(t *testing.T) {
 	}
 	if code := cmdRun([]string{"backup", "j00000001", "manual"}); code != 75 {
 		t.Fatalf("a backup started by hand during a restore must wait, got exit %d", code)
+	}
+}
+
+func TestTickWaitsAfterArrayStartAndDuringParity(t *testing.T) {
+	cfg, _, spawned := tickTestSetup(t)
+	cfg.Settings.Secrets = "plain"
+	cfg.Settings.StartDelay = 5
+	configSave(cfg)
+	slot := cronLocal(2026, 11, 3, 3, 0)
+	stateUpdate(cfg.Settings, func(s M) {
+		sub(s, "jobs", "j00000001")["sched"] = M{"key": "cron:0 3 * * *", "since": slot - 86400, "slot": slot - 86400}
+	})
+	at := slot + 600
+	os.WriteFile(RunDir+"/array_started", []byte(strconv.FormatInt(at-299, 10)+"\n"), 0o644)
+	schedulerTick(configLoad(), at)
+	if len(*spawned) != 0 {
+		t.Fatalf("nothing starts within the start delay: %v", *spawned)
+	}
+	if toInt64(mapOf(mapOf(mapOf(stateRead(cfg.Settings)["jobs"])["j00000001"])["sched"])["slot"]) != slot-86400 {
+		t.Fatal("the start delay must not use up the slot")
+	}
+	os.WriteFile(VarIni, []byte("mdState=\"STARTED\"\nfsState=\"Started\"\nmdResync=\"1\"\nmdResyncPos=\"10\"\n"), 0o644)
+	schedulerTick(configLoad(), at+1)
+	if len(*spawned) != 0 {
+		t.Fatalf("nothing starts while parity runs: %v", *spawned)
+	}
+	cfg.Settings.ParityPause = false
+	configSave(cfg)
+	schedulerTick(configLoad(), at+1)
+	if len(*spawned) != 1 {
+		t.Fatalf("the start delay ends after exactly five minutes: %v", *spawned)
+	}
+}
+
+func TestAQueuedJobIgnoresTheStartDelay(t *testing.T) {
+	cfg, _, spawned := tickTestSetup(t)
+	cfg.Settings.Secrets = "plain"
+	configSave(cfg)
+	at := cronLocal(2026, 11, 3, 12, 0)
+	stateUpdate(cfg.Settings, func(s M) {
+		sub(s, "jobs", "j00000001")["sched"] = M{"key": "cron:0 3 * * *", "since": at - 3600, "slot": at - 3600}
+		sub(s, "jobs", "j00000001")["queued"] = at - 60
+	})
+	os.WriteFile(RunDir+"/array_started", []byte(strconv.FormatInt(at, 10)), 0o644)
+	schedulerTick(configLoad(), at)
+	if len(*spawned) != 1 || strings.Join((*spawned)[0], " ") != "run backup j00000001 manual" {
+		t.Fatalf("a queued job waited long enough and starts at once: %v", *spawned)
+	}
+}
+
+func TestTickStartsMaintenance(t *testing.T) {
+	cfg, notes, spawned := tickTestSetup(t)
+	cfg.Jobs = nil
+	r := &cfg.Repos[0]
+	r.Maintenance.Prune.Enabled, r.Maintenance.Prune.Schedule = true, Schedule{Mode: "cron", Cron: "0 4 * * 0", CatchUp: true}
+	r.Maintenance.Check.Enabled, r.Maintenance.Check.Schedule = true, Schedule{Mode: "cron", Cron: "0 4 * * 0", CatchUp: true}
+	configSave(cfg)
+	slot := cronLocal(2026, 11, 8, 4, 0)
+	stateUpdate(cfg.Settings, func(s M) {
+		for _, kind := range []string{"prune", "check"} {
+			sub(s, "repos", r.ID, kind)["sched"] = M{"key": "cron:0 4 * * 0", "since": slot - 7*86400, "slot": slot - 7*86400}
+		}
+	})
+	schedulerTick(configLoad(), slot+60)
+	if len(*spawned) != 0 || len(waitNotes(notes, 1)) != 1 {
+		t.Fatalf("locked: maintenance waits and the user is told once: %v", *spawned)
+	}
+
+	cfg.Settings.Secrets = "plain"
+	cfg.Repos[0].AppendOnly = true
+	configSave(cfg)
+	os.WriteFile(RunDir+"/array_started", []byte(strconv.FormatInt(slot+100, 10)), 0o644)
+	schedulerTick(configLoad(), slot+110)
+	if len(*spawned) != 0 {
+		t.Fatalf("maintenance waits for the start delay: %v", *spawned)
+	}
+	os.Remove(RunDir + "/array_started")
+	schedulerTick(configLoad(), slot+120)
+	if len(*spawned) != 1 || strings.Join((*spawned)[0], " ") != "run check r00000001 schedule" {
+		t.Fatalf("append-only repositories are never pruned, the check runs: %v", *spawned)
+	}
+	st := mapOf(mapOf(stateRead(cfg.Settings)["repos"])[r.ID])
+	if toInt64(mapOf(mapOf(st["check"])["sched"])["slot"]) != slot {
+		t.Fatalf("the check slot is used up once started: %v", st)
+	}
+
+	cfg.Repos[0].AppendOnly = false
+	configSave(cfg)
+	schedulerTick(configLoad(), slot+180)
+	if len(*spawned) != 2 || strings.Join((*spawned)[1], " ") != "run prune r00000001 schedule" {
+		t.Fatalf("the prune runs once the repository allows it: %v", *spawned)
+	}
+	schedulerTick(configLoad(), slot+240)
+	if len(*spawned) != 2 {
+		t.Fatalf("a used-up slot does not start again: %v", *spawned)
 	}
 }

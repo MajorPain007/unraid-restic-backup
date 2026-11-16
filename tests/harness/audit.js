@@ -6,6 +6,14 @@ window.rbAudit = async function () {
     window.addEventListener('unhandledrejection', onError);
     const still = document.head.appendChild(document.createElement('style'));
     still.textContent = '#rb-app * { animation: none !important; transition: none !important; }';
+    const scrolls = (el, panel) => {
+        for (let p = el.parentElement; p && p !== panel; p = p.parentElement) {
+            if (['auto', 'scroll'].includes(getComputedStyle(p).overflowX)) {
+                return true;
+            }
+        }
+        return false;
+    };
     const check = label => {
         document.querySelectorAll('#rb-app *').forEach(el => {
             const cs = getComputedStyle(el);
@@ -40,7 +48,7 @@ window.rbAudit = async function () {
             panel.querySelectorAll('*').forEach(el => {
                 const r = el.getBoundingClientRect();
                 const p = panel.getBoundingClientRect();
-                if (r.width && (r.right > p.right + 1 || r.left < p.left - 1) && !el.closest('.rb-browser-scroll')) {
+                if (r.width && (r.right > p.right + 1 || r.left < p.left - 1) && !scrolls(el, panel)) {
                     report.push(label + ': sticks out of its dialog: ' + (el.className || el.tagName) + ' "' +
                                 (el.textContent || '').slice(0, 40) + '"');
                 }
@@ -48,105 +56,117 @@ window.rbAudit = async function () {
         });
     };
     const closeAll = async () => {
-        for (let i = 0; i < 4; i++) {
-            document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}));
-            await wait(80);
+        for (let i = 0; i < 6 && document.querySelector('#rb-app .rb-overlay'); i++) {
+            const discard = [...document.querySelectorAll('#rb-app .rb-overlay:last-child button')].find(b => b.textContent.trim() === 'Discard');
+            if (discard) {
+                discard.click();
+            } else {
+                (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+            }
+            await wait(150);
+        }
+        if (document.querySelector('#rb-app .rb-overlay')) {
+            report.push('a dialog did not close, later checks are unreliable');
         }
     };
-    for (const tab of ['jobs', 'repos', 'snapshots', 'activity', 'settings']) {
-        RB.show(tab);
+    const tab = async name => {
+        const t = [...document.querySelectorAll('#rb-app .rb-tab')].find(x => x.textContent.includes(name));
+        if (!t) {
+            report.push(name + ': no such tab, not checked');
+            return;
+        }
+        t.click();
         await wait(1500);
-        check(tab);
+        check(name);
+    };
+    const visible = sel => [...document.querySelectorAll(sel)].filter(x => !x.disabled && x.getClientRects().length);
+    const open = async (text, label, ms = 1200) => {
+        const b = visible('#rb-app button').find(x => x.textContent.trim().startsWith(text));
+        if (!b) {
+            report.push(label + ': no "' + text + '" button, not checked');
+            return false;
+        }
+        b.click();
+        await wait(ms);
+        check(label);
+        return true;
+    };
+    const fromMenu = async (card, item, label, ms = 1200) => {
+        const more = document.querySelector('#rb-app ' + card + ' button[title="More"]');
+        if (!more) {
+            report.push(label + ': no card with a menu, not checked');
+            return false;
+        }
+        more.click();
+        await wait(300);
+        return open(item, label, ms);
+    };
+    const options = async label => {
+        for (const name of ['ZFS snapshot, brief', 'Stop while']) {
+            const card = [...document.querySelectorAll('#rb-app .rb-option')].find(b => b.textContent.includes(name));
+            if (!card) {
+                report.push(label + ': no "' + name + '" option, not checked');
+                continue;
+            }
+            card.click();
+            await wait(1500);
+            check(label + ' / ' + name);
+        }
+    };
+
+    for (const name of ['Jobs', 'Repositories', 'Snapshots', 'Activity', 'Settings']) {
+        await tab(name);
     }
-    RB.show('snapshots');
-    await wait(1500);
+    await tab('Snapshots');
     const snap = document.querySelector('#rb-app .rb-snap');
     if (snap) {
         snap.click();
         await wait(2500);
         check('snapshot browser');
-        const restore = [...document.querySelectorAll('#rb-app .rb-selbar button')].pop();
-        if (restore) {
-            restore.click();
-            await wait(800);
-            check('restore dialog');
+        if (await open('Restore', 'restore dialog', 800)) {
+            await closeAll();
+        }
+    } else {
+        report.push('snapshot browser: no snapshot, not checked');
+    }
+    await tab('Jobs');
+    for (const [item, label, ms] of [['Edit', 'job editor', 1500], ['What gets backed up', 'preview', 3500], ['Size history', 'size history', 1500], ['Last log', 'log', 1200]]) {
+        if (await fromMenu('.rb-card', item, label, ms)) {
+            if (label === 'job editor') {
+                await options(label);
+            }
             await closeAll();
         }
     }
-    RB.show('jobs');
-    await wait(800);
-    const job = RB.state.overview.config.jobs[0];
-    if (job) {
-        RB.editJob(job.id);
-        await wait(1500);
-        check('job editor');
-        for (const name of ['ZFS snapshot, brief', 'Stop while']) {
-            const card = [...document.querySelectorAll('#rb-app .rb-option')].find(b => b.textContent.includes(name));
-            if (card) {
-                card.click();
-                await wait(1500);
-                check('job editor / ' + name);
+    if (await open('New job', 'new job', 800)) {
+        await options('new job');
+        if (await open('Add folder', 'folder picker', 800)) {
+            const firstDir = document.querySelector('#rb-app .rb-overlay:last-child tr.clickable td.name');
+            if (firstDir) {
+                firstDir.click();
+                await wait(800);
             }
+            [...document.querySelectorAll('#rb-app .rb-overlay:last-child td.pick input')].slice(0, 2).forEach(cb => cb.click());
+            await wait(300);
+            check('folder picker / selected');
         }
         await closeAll();
     }
-    RB.editJob(null);
-    await wait(800);
-    check('new job');
-    for (const name of ['ZFS snapshot, brief', 'Stop while']) {
-        const card = [...document.querySelectorAll('#rb-app .rb-option')].find(b => b.textContent.includes(name));
-        if (card) {
-            card.click();
-            await wait(1500);
-            check('new job / ' + name);
+    await tab('Settings');
+    if (await open('Browse...', 'data folder picker', 800)) {
+        await open('New folder', 'data folder picker / new folder', 300);
+        await closeAll();
+    }
+    await tab('Repositories');
+    for (const [item, label] of [['Edit', 'repo editor'], ['Keys', 'keys'], ['Show password', 'show password']]) {
+        if (await fromMenu('.rb-card', item, label)) {
+            await closeAll();
         }
     }
-    await closeAll();
-    for (const repo of RB.state.overview.config.repos) {
-        RB.editRepo(repo.id);
-        await wait(800);
-        check('repo editor ' + repo.type);
+    if (await open('Add repository', 'new repo', 800)) {
         await closeAll();
     }
-    RB.editRepo(null);
-    await wait(800);
-    check('new repo');
-    await closeAll();
-    const recent = RB.state.overview.recent[0];
-    if (recent) {
-        RB.showLog(recent.id);
-        await wait(1200);
-        check('log');
-        await closeAll();
-    }
-    if (job) {
-        RB.previewJob(job);
-        await wait(3500);
-        check('preview');
-        await closeAll();
-        RB.sizeHistory({job: job.id});
-        await wait(1500);
-        check('size history');
-        await closeAll();
-    }
-    RB.pickPath({title: 'Folder picker', multiple: true, create: true, start: '/mnt'});
-    await wait(800);
-    const firstDir = document.querySelector('#rb-app .rb-overlay:last-child tr.clickable td.name');
-    if (firstDir) {
-        firstDir.click();
-        await wait(800);
-    }
-    const newBtn = [...document.querySelectorAll('#rb-app .rb-overlay:last-child .rb-browser-head button')]
-        .find(b => b.textContent.trim() === 'New folder' && !b.disabled);
-    if (newBtn) {
-        newBtn.click();
-        await wait(300);
-    }
-    [...document.querySelectorAll('#rb-app .rb-overlay:last-child td.pick input')].slice(0, 2).forEach(cb => cb.click());
-    await wait(300);
-    check('folder picker');
-    await closeAll();
-    RB.show('jobs');
+    await tab('Jobs');
     still.remove();
     window.removeEventListener('error', onError);
     window.removeEventListener('unhandledrejection', onError);

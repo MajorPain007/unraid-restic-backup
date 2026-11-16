@@ -149,3 +149,18 @@ func TestSchedDescribe(t *testing.T) {
 	cronEq(t, "Every day", schedDescribe(schedEvery(1, "days")))
 	cronEq(t, "Manual only", schedDescribe(Schedule{Mode: "off"}))
 }
+
+func TestSchedGraceBoundary(t *testing.T) {
+	cronTestZone(t)
+	s := schedCron("0 3 * * *", false)
+	e := schedDecide(s, M{}, cronAt(t, "2026-10-01 10:00")).Entry
+	slot := cronAt(t, "2026-10-02 03:00")
+	cronEq(t, true, schedDecide(s, e, slot+schedGrace).Due, "exactly at the end of the grace period")
+	late := schedDecide(s, e, slot+schedGrace+1)
+	cronEq(t, false, late.Due, "one second after the grace period")
+	cronEq(t, true, late.Skip)
+	next, _ := schedNext(s, e, slot+schedGrace)
+	cronEq(t, slot, next)
+	next, _ = schedNext(s, e, slot+schedGrace+1)
+	cronEq(t, cronAt(t, "2026-10-03 03:00"), next)
+}

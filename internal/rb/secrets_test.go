@@ -2,6 +2,7 @@ package rb
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -133,4 +134,41 @@ func switchSecrets(cfg *Config, mode, password string) error {
 		then(true)
 	}
 	return err
+}
+
+func TestSecretsSwitchNotSaved(t *testing.T) {
+	base := useTestDirs(t)
+	cfg := &Config{Version: 1, Settings: defaultSettings(), Repos: []Repo{{ID: "r00000001", Name: "a", Type: "local"}}, Jobs: []Job{}}
+	cfg.Settings.DataDir = base + "/pool"
+	saveMode(t, cfg, "plain")
+	secretSet("r00000001", "password", "repo-password-123")
+	if err := switchSecrets(cfg, "master", "1234567"); err == nil {
+		t.Fatal("seven characters are too short")
+	}
+	then, err := secretsSwitch(cfg, "master", "12345678")
+	if err != nil {
+		t.Fatalf("eight characters are enough: %v", err)
+	}
+	then(false)
+	staged, _ := filepath.Glob(SecretsDir + "/*.new")
+	if len(staged) != 0 || isFile(masterFile()) || !flashHolds(t, "repo-password-123") || secretGet("r00000001", "password") != "repo-password-123" {
+		t.Fatalf("a switch whose config was not saved changes nothing: staged %q", staged)
+	}
+
+	if err := switchSecrets(cfg, "master", "12345678"); err != nil {
+		t.Fatal(err)
+	}
+	saveMode(t, cfg, "master")
+	masterLock()
+	if err := switchSecrets(cfg, "plain", ""); err == nil || !strings.Contains(err.Error(), "Unlock") {
+		t.Fatalf("a locked master password blocks the switch: %v", err)
+	}
+	masterUnlock("12345678")
+	if err := switchSecrets(cfg, "master", "another password"); err != nil {
+		t.Fatal(err)
+	}
+	masterLock()
+	if masterUnlock("12345678") == nil || masterUnlock("another password") != nil {
+		t.Fatal("setting a new master password replaces the old one")
+	}
 }

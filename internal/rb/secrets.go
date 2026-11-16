@@ -415,18 +415,16 @@ func secretsRepair() string {
 	l := configLock()
 	defer l.Unlock()
 	s := configLoad().Settings
-	if b, err := os.ReadFile(switchFile()); err != nil || string(b) != s.Secrets {
+	b, err := os.ReadFile(switchFile())
+	staged := strings.Split(string(b), "\n")
+	if err != nil || staged[0] != s.Secrets {
 		for _, f := range left {
 			shred(f)
 		}
 		os.Remove(switchFile())
 		return ""
 	}
-	staged := make([]string, len(left))
-	for i, f := range left {
-		staged[i] = strings.TrimSuffix(f, ".new")
-	}
-	if !secretsApply(s, s.Secrets, staged) {
+	if !secretsApply(s, s.Secrets, staged[1:]) {
 		return "A change of the password mode could not be finished: " + strings.Join(left, ", ") + " could not be renamed. Check that the flash drive and the data folder are writable; it is tried again every minute."
 	}
 	return ""
@@ -520,7 +518,7 @@ func secretsSwitch(cfg *Config, mode, password string) (func(saved bool), error)
 			return fail("Writing a password failed.")
 		}
 	}
-	if !fileWrite(switchFile(), []byte(mode), 0o600) {
+	if !fileWrite(switchFile(), []byte(strings.Join(append([]string{mode}, staged...), "\n")), 0o600) {
 		return fail("Writing to the flash drive failed.")
 	}
 	return func(saved bool) {

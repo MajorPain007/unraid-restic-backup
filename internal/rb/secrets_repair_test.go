@@ -145,3 +145,21 @@ func TestARepairThatCannotRenameIsReported(t *testing.T) {
 		t.Fatal("nothing old is removed while the change is stuck")
 	}
 }
+
+func TestARepairAfterSomeRenamesCleansUpEverything(t *testing.T) {
+	cfg, _ := halfDoneSwitch(t)
+	cfg.Settings.Secrets = "key"
+	configSave(cfg)
+	for _, f := range secretsHalfDone() {
+		os.Rename(f, strings.TrimSuffix(f, ".new"))
+	}
+	if msg := secretsRepair(); msg != "" {
+		t.Fatal(msg)
+	}
+	if exists(plainSecretFile("r00000001", "password")) || exists(sshPlainKey("r00000001")) || exists(switchFile()) {
+		t.Fatal("plain copies stay on the flash when the crash came after the last rename")
+	}
+	if secretGet("r00000001", "password") != "repo-password-123" {
+		t.Fatal("the password reads in key mode")
+	}
+}

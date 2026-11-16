@@ -470,7 +470,10 @@ func apiRestoreStart(p M) (M, error) {
 	file := dir + "/" + randHex(8) + ".json"
 	jsonWrite(file, M{"snapshot": snap, "items": items, "target": target, "target_path": targetPath,
 		"overwrite": overwrite, "delete": toBool(param(p, "delete", false))}, 0o600)
-	spawn("run", "restore", repo.ID, file)
+	if err := spawn("run", "restore", repo.ID, file); err != nil {
+		os.Remove(file)
+		return nil, spawnFail(err)
+	}
 	return M{"started": true}, nil
 }
 

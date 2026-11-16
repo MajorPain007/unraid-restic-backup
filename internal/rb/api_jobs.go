@@ -67,7 +67,9 @@ func apiJobPreview(p M) (M, error) {
 	id := newOpID()
 	jsonWrite(previewFilePath(id, ".request.json"), previewRequest{Job: job, Repo: jobRepoOrEmpty(cfg, job.Repo),
 		Settings: cfg.Settings}, 0o644)
-	spawn("preview", id)
+	if err := spawn("preview", id); err != nil {
+		return nil, spawnFail(err)
+	}
 	return M{"id": id}, nil
 }
 
@@ -184,7 +186,9 @@ func apiJobRun(p M) (M, error) {
 		})
 		return M{"queued": true}, nil
 	}
-	spawn("run", "backup", job.ID, "manual")
+	if err := spawn("run", "backup", job.ID, "manual"); err != nil {
+		return nil, spawnFail(err)
+	}
 	return M{"started": true}, nil
 }
 
@@ -204,7 +208,9 @@ func apiJobForget(p M) (M, error) {
 	if repoBusy(repo.ID) {
 		return nil, apiFail("An operation on this repository is running. Try again when it has finished.")
 	}
-	spawn("run", "forget", job.ID, "manual")
+	if err := spawn("run", "forget", job.ID, "manual"); err != nil {
+		return nil, spawnFail(err)
+	}
 	return M{"started": true}, nil
 }
 

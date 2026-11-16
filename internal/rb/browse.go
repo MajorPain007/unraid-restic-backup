@@ -121,8 +121,10 @@ func browseStart(repo Repo) *browseState {
 	}
 	os.MkdirAll(browseDir(), 0o755)
 	s := &browseState{Status: "starting", Started: now()}
+	if err := spawn("browse", repo.ID); err != nil {
+		s.Status, s.Ended, s.Error = "error", now(), "The snapshot browser could not be started: "+err.Error()+". Reinstalling the plugin usually helps."
+	}
 	jsonWrite(browseFiles(repo.ID).Status, s, 0o644)
-	spawn("browse", repo.ID)
 	return s
 }
 

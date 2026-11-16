@@ -360,3 +360,7 @@ func spawn(args ...string) error {
 	cmd.Process.Release()
 	return nil
 }
+
+func spawnFail(err error) error {
+	return apiFail("It could not be started: " + err.Error() + ". Reinstalling the plugin usually helps.")
+}

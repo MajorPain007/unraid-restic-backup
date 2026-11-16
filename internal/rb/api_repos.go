@@ -592,6 +592,8 @@ func apiRepoRun(p M) (M, error) {
 	if repoBusy(repo.ID) || opRunningOn(repo.ID, "restore") != nil {
 		return nil, apiFail("An operation on this repository is running. Try again when it has finished.")
 	}
-	spawn("run", kind, repo.ID, "manual")
+	if err := spawn("run", kind, repo.ID, "manual"); err != nil {
+		return nil, spawnFail(err)
+	}
 	return M{"started": true}, nil
 }

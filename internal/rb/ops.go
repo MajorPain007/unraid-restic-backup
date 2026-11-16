@@ -16,7 +16,7 @@ import (
 )
 
 func prepareDataDir(s Settings) string {
-	for _, sub := range []string{"/cache", "/logs", "/journal"} {
+	for _, sub := range []string{"/cache", "/logs", "/journal", "/runs"} {
 		if st, err := os.Lstat(s.DataDir + sub); err == nil && st.Mode()&os.ModeSymlink != 0 {
 			return s.DataDir + sub + " is a symbolic link. Nothing is written there; remove the link so the folder can be created again."
 		}

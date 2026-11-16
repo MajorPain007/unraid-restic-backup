@@ -372,3 +372,65 @@ func TestTickStartsMaintenance(t *testing.T) {
 		t.Fatalf("a used-up slot does not start again: %v", *spawned)
 	}
 }
+
+func TestARunCutOffByARebootShowsUpAsInterrupted(t *testing.T) {
+	cfg, notes, _ := tickTestSetup(t)
+	cfg.Settings.Secrets = "plain"
+	configSave(cfg)
+	cfg = configLoad()
+	r := newRunner("backup", cfg, cfg.Repos[0], &cfg.Jobs[0], "schedule", nil)
+	r.write(true)
+	r.markStart()
+	mark := runMarkFile(cfg.Settings, r.id())
+	if !exists(mark) {
+		t.Fatal("a running backup leaves a mark in the data folder")
+	}
+	reapDeadRuns(configLoad())
+	if !exists(mark) || len(historyRead(cfg.Settings, M{}, 10)) != 0 {
+		t.Fatal("a run of this boot is left alone")
+	}
+
+	os.RemoveAll(OpsDir)
+	m, _ := jsonRead(mark)
+	m["boot"] = "an-earlier-boot"
+	m["mac"] = signMAC(r.id(), m, runMarkFields, journalKey(false))
+	jsonWrite(mark, m, 0o644)
+	forged := runMarkFile(cfg.Settings, "20261115-030000-abcd")
+	jsonWrite(forged, M{"kind": "backup", "job": "j00000001", "boot": "an-earlier-boot", "log": t.TempDir() + "/victim", "mac": "00"}, 0o644)
+
+	reapDeadRuns(configLoad())
+	h := historyRead(cfg.Settings, M{}, 10)
+	if len(h) != 1 || str(h[0]["id"]) != r.id() || str(h[0]["status"]) != "error" || !strings.Contains(str(h[0]["error"]), "restarted") {
+		t.Fatalf("the cut-off run is in the history as interrupted, the forged one is not: %v", h)
+	}
+	last := mapOf(mapOf(mapOf(stateRead(cfg.Settings)["jobs"])["j00000001"])["last"])
+	if str(last["id"]) != r.id() || str(last["status"]) != "error" {
+		t.Fatalf("the job's last run shows it: %v", last)
+	}
+	if n := waitNotes(notes, 1); len(n) != 1 || !strings.Contains(n[0], "Docs") {
+		t.Fatalf("one notification for the job, got %q", n)
+	}
+	if exists(mark) || !exists(forged) {
+		t.Fatal("the mark is cleared; the forged one stays untouched")
+	}
+	if why := journalUntrusted(cfg.Settings); !strings.Contains(why, forged) {
+		t.Fatalf("the forged mark is reported, got %q", why)
+	}
+	reapDeadRuns(configLoad())
+	if len(historyRead(cfg.Settings, M{}, 10)) != 1 {
+		t.Fatal("it is recorded once")
+	}
+}
+
+func TestAFinishedRunLeavesNoMark(t *testing.T) {
+	cfg, _, _ := tickTestSetup(t)
+	cfg.Settings.Secrets = "plain"
+	configSave(cfg)
+	cfg = configLoad()
+	r := newRunner("backup", cfg, cfg.Repos[0], &cfg.Jobs[0], "manual", nil)
+	r.markStart()
+	r.finish("success", "", nil)
+	if exists(runMarkFile(cfg.Settings, r.id())) {
+		t.Fatal("the mark goes with the run")
+	}
+}

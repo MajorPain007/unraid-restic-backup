@@ -866,11 +866,15 @@ func journalKey(create bool) []byte {
 }
 
 func journalMAC(id string, m M, key []byte) string {
+	return signMAC(id, m, []string{"containers", "vms", "snapshots", "snap", "log", "runner_pid", "boot", "ended"}, key)
+}
+
+func signMAC(id string, m M, fields []string, key []byte) string {
 	if key == nil {
 		return ""
 	}
 	signed := M{"id": id}
-	for _, k := range []string{"containers", "vms", "snapshots", "snap", "log", "runner_pid", "boot", "ended"} {
+	for _, k := range fields {
 		if v, ok := m[k]; ok {
 			signed[k] = v
 		}
@@ -1021,6 +1025,12 @@ func journalUntrusted(s Settings) string {
 	var bad []string
 	for _, f := range journalFiles(s) {
 		if raw, ok := jsonRead(f); ok && len(raw) > 0 && !journalTrusted(f, raw) {
+			bad = append(bad, f)
+		}
+	}
+	marks, _ := filepath.Glob(runMarkDir(s) + "/*.json")
+	for _, f := range marks {
+		if _, ok := runMarkRead(f); !ok {
 			bad = append(bad, f)
 		}
 	}

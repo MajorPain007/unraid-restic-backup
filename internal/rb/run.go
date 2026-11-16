@@ -223,6 +223,7 @@ func (r *runner) finish(status, errMsg string, summary any) {
 		errMsg = strings.Join(r.errors[:n], "; ")
 	}
 	r.finished = true
+	os.Remove(runMarkFile(r.settings, r.id()))
 	if r.kind() != "restore" {
 		browseStop(r.repo.ID, 0)
 	}
@@ -1137,6 +1138,7 @@ func cmdRun(args []string) int {
 		r.finish("error", problem, nil)
 		return 1
 	}
+	r.markStart()
 	r.execute(kind, request)
 	if str(r.op["status"]) == "error" {
 		return 1

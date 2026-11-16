@@ -1,8 +1,11 @@
 package rb
 
 import (
+	"crypto/hmac"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -90,6 +93,61 @@ func reapDeadRuns(cfg *Config) {
 		}
 		r.finish("error", "The run was interrupted: its process ended without finishing (killed, out of memory, or the server stopped).", nil)
 	}
+	marks, _ := filepath.Glob(runMarkDir(cfg.Settings) + "/*.json")
+	for _, f := range marks {
+		m, ok := runMarkRead(f)
+		if !ok || str(m["boot"]) == bootID() {
+			continue
+		}
+		op := M{"status": "running", "ended": int64(0)}
+		for _, k := range append([]string{"id"}, runMarkFields...) {
+			op[k] = m[k]
+		}
+		delete(op, "boot")
+		r := &runner{op: op, cfg: cfg, settings: cfg.Settings, logFile: str(m["log"]),
+			repo: Repo{ID: str(m["repo"]), Name: str(m["repo_name"])}, job: cfg.job(str(m["job"]))}
+		if repo := cfg.repo(r.repo.ID); repo != nil {
+			r.repo = *repo
+		}
+		r.finish("error", "The run was interrupted: the server restarted or lost power while it ran.", nil)
+	}
+}
+
+var runMarkFields = []string{"kind", "job", "job_name", "repo", "repo_name", "trigger", "started", "log", "boot"}
+
+func runMarkDir(s Settings) string {
+	return s.DataDir + "/runs"
+}
+
+func runMarkFile(s Settings, id string) string {
+	return runMarkDir(s) + "/" + id + ".json"
+}
+
+func (r *runner) markStart() {
+	key := journalKey(true)
+	if key == nil {
+		return
+	}
+	m := M{"boot": bootID()}
+	for _, k := range runMarkFields[:len(runMarkFields)-1] {
+		m[k] = r.op[k]
+	}
+	m["mac"] = signMAC(r.id(), m, runMarkFields, key)
+	jsonWrite(runMarkFile(r.settings, r.id()), m, 0o644)
+}
+
+func runMarkRead(file string) (M, bool) {
+	id := strings.TrimSuffix(filepath.Base(file), ".json")
+	m, ok := jsonRead(file)
+	if !ok || !reOpID.MatchString(id) {
+		return nil, false
+	}
+	want := signMAC(id, m, runMarkFields, journalKey(false))
+	if want == "" || !hmac.Equal([]byte(str(m["mac"])), []byte(want)) {
+		return nil, false
+	}
+	m["id"] = id
+	return m, true
 }
 
 func schedulerTick(cfg *Config, t int64) {

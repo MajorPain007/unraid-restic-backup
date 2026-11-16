@@ -377,37 +377,59 @@ func secretsHalfDone() []string {
 	return append(append(a, b...), c...)
 }
 
-func secretsRepair() {
-	if len(secretsHalfDone()) == 0 {
-		return
+func switchFile() string {
+	return SecretsDir + "/.switch"
+}
+
+func secretsApply(s Settings, mode string, staged []string) bool {
+	for _, p := range staged {
+		if exists(p+".new") && os.Rename(p+".new", p) != nil {
+			return false
+		}
+	}
+	for _, p := range staged {
+		switch {
+		case p == masterFile() || p == keyFile(s) || p == unlockedKeyFile():
+		case mode == "plain":
+			os.Remove(p + ".enc")
+		default:
+			shred(strings.TrimSuffix(p, ".enc"))
+		}
+	}
+	if mode != "key" {
+		shred(keyFile(s))
+	}
+	if mode != "master" && exists(masterFile()) {
+		os.Remove(masterFile())
+		masterLock()
+	}
+	os.Remove(switchFile())
+	return true
+}
+
+func secretsRepair() string {
+	left := secretsHalfDone()
+	if len(left) == 0 && !exists(switchFile()) {
+		return ""
 	}
 	l := configLock()
 	defer l.Unlock()
-	settings := configLoad().Settings
-	mode, kf := settings.Secrets, keyFile(settings)
-	for _, f := range secretsHalfDone() {
-		final := strings.TrimSuffix(f, ".new")
-		enc := strings.HasSuffix(final, ".enc")
-		current := enc == (mode != "plain")
-		if final == masterFile() {
-			current = mode == "master"
-		}
-		if final == kf {
-			current = mode == "key"
-		}
-		if !current {
+	s := configLoad().Settings
+	if b, err := os.ReadFile(switchFile()); err != nil || string(b) != s.Secrets {
+		for _, f := range left {
 			shred(f)
-			continue
 		}
-		if os.Rename(f, final) != nil || final == masterFile() || final == kf {
-			continue
-		}
-		if enc {
-			shred(strings.TrimSuffix(final, ".enc"))
-		} else {
-			os.Remove(final + ".enc")
-		}
+		os.Remove(switchFile())
+		return ""
 	}
+	staged := make([]string, len(left))
+	for i, f := range left {
+		staged[i] = strings.TrimSuffix(f, ".new")
+	}
+	if !secretsApply(s, s.Secrets, staged) {
+		return "A change of the password mode could not be finished: " + strings.Join(left, ", ") + " could not be renamed. Check that the flash drive and the data folder are writable; it is tried again every minute."
+	}
+	return ""
 }
 
 func secretsSwitch(cfg *Config, mode, password string) (func(saved bool), error) {
@@ -498,42 +520,19 @@ func secretsSwitch(cfg *Config, mode, password string) (func(saved bool), error)
 			return fail("Writing a password failed.")
 		}
 	}
+	if !fileWrite(switchFile(), []byte(mode), 0o600) {
+		return fail("Writing to the flash drive failed.")
+	}
 	return func(saved bool) {
 		if !saved {
 			for _, p := range staged {
 				os.Remove(p + ".new")
 			}
-			wipeRunSecrets()
-			return
-		}
-		for _, p := range staged {
-			if os.Rename(p+".new", p) != nil {
-				return
-			}
-		}
-		for _, it := range items {
-			if mode == "plain" {
-				if it.kind == "ssh" {
-					os.Remove(sshEncKey(it.repo))
-				} else {
-					os.Remove(encSecretFile(it.repo, it.kind))
-				}
-				continue
-			}
-			if it.kind == "ssh" {
-				shred(sshPlainKey(it.repo))
-			} else {
-				shred(plainSecretFile(it.repo, it.kind))
-			}
+			os.Remove(switchFile())
+		} else {
+			secretsApply(cur, mode, staged)
 		}
 		wipeRunSecrets()
-		if cur.Secrets == "key" && mode != "key" {
-			shred(keyFile(cur))
-		}
-		if cur.Secrets == "master" && mode != "master" {
-			os.Remove(masterFile())
-			masterLock()
-		}
 	}, nil
 }
 

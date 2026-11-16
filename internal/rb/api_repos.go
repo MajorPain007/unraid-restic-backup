@@ -68,8 +68,15 @@ func apiRepoSave(p M) (M, error) {
 		if len(errs) > 0 {
 			return nil, nil, apiFail("Please correct the marked fields.", errs...)
 		}
-		if repo.Type == "sftp" && !sshKeyExists(repo.ID) {
+		newKey := repo.Type == "sftp" && !sshKeyExists(repo.ID)
+		dropKey := func() {
+			for _, f := range []string{sshPlainKey(repo.ID), sshEncKey(repo.ID), sshPlainKey(repo.ID) + ".pub"} {
+				os.Remove(f)
+			}
+		}
+		if newKey {
 			if _, err := sshKeygen(repo.ID); err != nil {
+				dropKey()
 				return nil, nil, err
 			}
 		}
@@ -81,6 +88,9 @@ func apiRepoSave(p M) (M, error) {
 			case isNew:
 				secretRemove(repo.ID)
 			default:
+				if newKey {
+					dropKey()
+				}
 				if passwordMode != "keep" {
 					secretSet(repo.ID, "password", oldPassword)
 				}

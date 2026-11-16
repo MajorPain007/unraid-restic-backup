@@ -61,7 +61,6 @@ func cmdTick(args []string) int {
 	if notifyOnce("config_problem", "Restic Backup cannot read its settings", configProblem()) {
 		return 0
 	}
-	secretsRepair()
 	if !arrayStarted() {
 		return 0
 	}
@@ -75,6 +74,7 @@ func cmdTick(args []string) int {
 	for _, n := range journalRecover(cfg.Settings) {
 		notify(n.Subject, n.Description, "warning", "")
 	}
+	notifyOnce("secrets_half_done", "Restic Backup could not finish a password mode change", secretsRepair())
 	notifyOnce("journal_untrusted", "Restic Backup ignores a journal it cannot verify", journalUntrusted(cfg.Settings))
 	reapDeadRuns(cfg)
 	schedulerTick(cfg, now())

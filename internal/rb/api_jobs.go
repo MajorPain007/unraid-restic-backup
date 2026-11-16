@@ -68,6 +68,7 @@ func apiJobPreview(p M) (M, error) {
 	jsonWrite(previewFilePath(id, ".request.json"), previewRequest{Job: job, Repo: jobRepoOrEmpty(cfg, job.Repo),
 		Settings: cfg.Settings}, 0o644)
 	if err := spawn("preview", id); err != nil {
+		os.Remove(previewFilePath(id, ".request.json"))
 		return nil, spawnFail(err)
 	}
 	return M{"id": id}, nil

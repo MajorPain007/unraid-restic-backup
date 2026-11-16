@@ -75,3 +75,73 @@ func TestRemovingARepositoryRemovesHalfDoneFiles(t *testing.T) {
 		}
 	}
 }
+
+func keyToMaster(t *testing.T) (*Config, func(bool)) {
+	cfg, then := halfDoneSwitch(t)
+	cfg.Settings.Secrets = "key"
+	configSave(cfg)
+	then(true)
+	if secretGet("r00000001", "password") != "repo-password-123" {
+		t.Fatal("setup: key mode reads")
+	}
+	then, err := secretsSwitch(cfg, "master", "a-long-master-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg, then
+}
+
+func TestKeyToMasterCutOffBeforeSavingKeepsKeyMode(t *testing.T) {
+	_, _ = keyToMaster(t)
+	if msg := secretsRepair(); msg != "" {
+		t.Fatal(msg)
+	}
+	if len(secretsHalfDone()) != 0 || exists(switchFile()) || exists(masterFile()) {
+		t.Fatalf("the staged master change is dropped: %v", secretsHalfDone())
+	}
+	if secretGet("r00000001", "password") != "repo-password-123" {
+		t.Fatal("key mode keeps reading its passwords")
+	}
+}
+
+func TestKeyToMasterCutOffAfterSavingIsFinished(t *testing.T) {
+	cfg, _ := keyToMaster(t)
+	cfg.Settings.Secrets = "master"
+	configSave(cfg)
+	if msg := secretsRepair(); msg != "" {
+		t.Fatal(msg)
+	}
+	if exists(keyFile(cfg.Settings)) || exists(switchFile()) {
+		t.Fatal("the old key and the marker are gone")
+	}
+	if err := masterUnlock("a-long-master-password"); err != nil {
+		t.Fatal(err)
+	}
+	if secretGet("r00000001", "password") != "repo-password-123" {
+		t.Fatal("master mode reads the passwords")
+	}
+}
+
+func TestAnIncompleteStagingIsDropped(t *testing.T) {
+	cfg, _ := halfDoneSwitch(t)
+	os.Remove(switchFile())
+	cfg.Settings.Secrets = "key"
+	configSave(cfg)
+	secretsRepair()
+	if len(secretsHalfDone()) != 0 || !exists(plainSecretFile("r00000001", "password")) {
+		t.Fatal("without the marker the staged files are dropped and the old ones stay")
+	}
+}
+
+func TestARepairThatCannotRenameIsReported(t *testing.T) {
+	cfg, _ := halfDoneSwitch(t)
+	cfg.Settings.Secrets = "key"
+	configSave(cfg)
+	os.MkdirAll(encSecretFile("r00000001", "password")+"/x", 0o700)
+	if msg := secretsRepair(); !strings.Contains(msg, "could not be finished") {
+		t.Fatalf("a stuck change is reported, got %q", msg)
+	}
+	if !exists(plainSecretFile("r00000001", "password")) || !exists(switchFile()) {
+		t.Fatal("nothing old is removed while the change is stuck")
+	}
+}

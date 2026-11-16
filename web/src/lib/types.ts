@@ -157,7 +157,6 @@ export interface RepoInfo {
 export interface SystemInfo {
   array_started: boolean;
   config_problem: string;
-  leftovers: { id: string; left: string[] }[];
   data_dir_ok: boolean;
   installed: number;
   restic: string;

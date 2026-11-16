@@ -54,6 +54,9 @@ func cmdTick(args []string) int {
 	}
 	defer l.Unlock()
 	touchFile(RunDir + "/scheduler.tick")
+	for _, n := range journalRecover() {
+		notify(n.Subject, n.Description, "warning", "")
+	}
 	browseReap(false)
 	if notifyOnce("config_problem", "Restic Backup cannot read its settings", configProblem()) {
 		return 0
@@ -67,9 +70,6 @@ func cmdTick(args []string) int {
 	}
 	if notifyOnce("data_dir_problem", "Restic Backup cannot use its data folder", prepareDataDir(cfg.Settings)) {
 		return 0
-	}
-	for _, n := range journalRecover(cfg.Settings) {
-		notify(n.Subject, n.Description, "warning", "")
 	}
 	reapDeadRuns(cfg)
 	schedulerTick(cfg, now())

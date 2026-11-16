@@ -8,8 +8,7 @@
   import SnapshotsView from './views/SnapshotsView.svelte';
   import ActivityView from './views/ActivityView.svelte';
   import SettingsView from './views/SettingsView.svelte';
-  import { app, fail, refresh, show, type Tab } from './lib/state.svelte';
-  import { api } from './lib/api';
+  import { app, refresh, show, type Tab } from './lib/state.svelte';
   import { actions } from './lib/actions';
   import { plural, relative } from './lib/format';
   import type { Overview } from './lib/types';
@@ -23,15 +22,6 @@
   ];
 
   refresh();
-
-  async function dismissLeftover(id: string) {
-    try {
-      await api('leftover_dismiss', { id });
-      await refresh();
-    } catch (e) {
-      fail(e);
-    }
-  }
 
   $effect(() => {
     const onVisible = () => {
@@ -109,12 +99,6 @@
   {#if o.system.config_problem}
     <div class="rb-card-note err rb-banner"><Icon name="alert" /><div>{o.system.config_problem}</div></div>
   {/if}
-  {#each o.system.leftovers ?? [] as l (l.id)}
-    <div class="rb-card-note warn rb-banner"><Icon name="alert" /><div>
-      A backup left these behind: {l.left.join(', ')}. They are retried every hour; start or remove them yourself, then dismiss this.
-      <Button small onclick={() => dismissLeftover(l.id)}>Dismiss</Button>
-    </div></div>
-  {/each}
   {#if !o.system.array_started}
     <div class="rb-card-note warn rb-banner"><Icon name="power" /><div>The array is stopped. Backups wait until it is started; missed ones run then.</div></div>
   {/if}

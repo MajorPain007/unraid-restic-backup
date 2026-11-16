@@ -1,6 +1,9 @@
 package rb
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -106,6 +109,10 @@ type Journal struct {
 	Done       []string
 	Attempts   int
 	RunnerPID  int
+	Boot       string
+	GaveUp     bool
+	Next       int64
+	MAC        string
 }
 
 type JournalNotice struct {
@@ -295,8 +302,13 @@ func zfsDestroy(datasets []string, snap string, log func(string)) []ZfsStuck {
 		for try := 1; ; try++ {
 			code, _, errs = rbCmd([]string{zfsBin, "destroy", name}, 120*time.Second)
 			low := strings.ToLower(errs)
-			if code == 0 || strings.Contains(low, "could not find") || strings.Contains(low, "does not exist") {
+			if code == 0 || strings.Contains(low, "could not find") {
 				gone = true
+				break
+			}
+			if strings.Contains(low, "does not exist") {
+				dc, _, _ := rbCmd([]string{zfsBin, "list", "-H", "-o", "name", "--", d}, 30*time.Second)
+				gone = dc == 0
 				break
 			}
 			if !strings.Contains(low, "busy") || try == 4 {
@@ -818,12 +830,74 @@ func vmStart(names []string, log func(string)) []string {
 	return failed
 }
 
-func journalDir() string {
-	return RunDir + "/journal"
+func journalDir(s Settings) string {
+	return s.DataDir + "/journal"
 }
 
-func journalFile(opID string) string {
-	return journalDir() + "/" + opID + ".json"
+func journalFile(s Settings, opID string) string {
+	return journalDir(s) + "/" + opID + ".json"
+}
+
+func journalKey(create bool) []byte {
+	path := SecretsDir + "/journal.key"
+	read := func() []byte {
+		b, _ := os.ReadFile(path)
+		if k, err := hex.DecodeString(strings.TrimSpace(string(b))); err == nil && len(k) == 32 {
+			return k
+		}
+		return nil
+	}
+	if k := read(); k != nil || !create {
+		return k
+	}
+	l := lockFile(RunDir+"/journal.key.lock", true)
+	if l == nil {
+		return nil
+	}
+	defer l.Unlock()
+	if k := read(); k != nil {
+		return k
+	}
+	privateDir(SecretsDir)
+	if !fileWrite(path, []byte(randHex(32)), 0o600) {
+		return nil
+	}
+	return read()
+}
+
+func journalMAC(id string, m M, key []byte) string {
+	if key == nil {
+		return ""
+	}
+	signed := M{"id": id}
+	for _, k := range []string{"containers", "vms", "snapshots", "snap", "log", "runner_pid", "boot", "ended"} {
+		if v, ok := m[k]; ok {
+			signed[k] = v
+		}
+	}
+	h := hmac.New(sha256.New, key)
+	h.Write(jsonEncode(signed, false))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func journalStore(file string, j Journal, full bool) bool {
+	m := j.toMap(full)
+	m["mac"] = journalMAC(strings.TrimSuffix(filepath.Base(file), ".json"), m, journalKey(true))
+	return jsonWrite(file, m, 0o644)
+}
+
+func journalTrusted(file string, raw M) bool {
+	if strings.HasPrefix(file, RunDir+"/") {
+		return true
+	}
+	j := journalFromMap(raw)
+	want := journalMAC(strings.TrimSuffix(filepath.Base(file), ".json"), j.toMap(false), journalKey(false))
+	return want != "" && hmac.Equal([]byte(j.MAC), []byte(want))
+}
+
+func bootID() string {
+	b, _ := os.ReadFile("/proc/sys/kernel/random/boot_id")
+	return strings.TrimSpace(string(b))
 }
 
 func stringList(v any) []string {
@@ -848,6 +922,10 @@ func journalFromMap(m M) Journal {
 		Done:       stringList(m["done"]),
 		Attempts:   toInt(m["attempts"]),
 		RunnerPID:  toInt(m["runner_pid"]),
+		Boot:       str(m["boot"]),
+		GaveUp:     phpTruthy(m["gave_up"]),
+		Next:       toInt64(m["next"]),
+		MAC:        str(m["mac"]),
 	}
 }
 
@@ -865,6 +943,7 @@ func (j Journal) toMap(full bool) M {
 		"snap":       j.Snap,
 		"log":        j.Log,
 		"runner_pid": j.RunnerPID,
+		"boot":       j.Boot,
 	}
 	if j.Ended {
 		m["ended"] = true
@@ -872,29 +951,95 @@ func (j Journal) toMap(full bool) M {
 	if full {
 		m["done"] = nz(j.Done)
 		m["attempts"] = j.Attempts
+		m["gave_up"] = j.GaveUp
+		m["next"] = j.Next
 	}
 	return m
 }
 
-func journalWrite(opID string, j Journal) bool {
+func journalWrite(s Settings, opID string, j Journal) bool {
 	j.RunnerPID = os.Getpid()
-	return jsonWrite(journalFile(opID), j.toMap(false), 0o644)
+	j.Boot = bootID()
+	return journalStore(journalFile(s, opID), j, false)
 }
 
-func journalClear(opID string) {
-	os.Remove(journalFile(opID))
+func journalClear(s Settings, opID string) {
+	os.Remove(journalFile(s, opID))
 }
 
-func journalRecover() []JournalNotice {
-	done := []JournalNotice{}
-	files, _ := filepath.Glob(journalDir() + "/*.json")
-	for _, file := range files {
-		raw, ok := jsonRead(file)
-		if !ok || len(raw) == 0 {
+func journalFiles(s Settings) []string {
+	a, _ := filepath.Glob(journalDir(s) + "/*.json")
+	b, _ := filepath.Glob(RunDir + "/journal/*.json")
+	return append(a, b...)
+}
+
+func journalRunnerAlive(j Journal) bool {
+	return (j.Boot == "" || j.Boot == bootID()) && pidAlive(j.RunnerPID)
+}
+
+func dockerRunning() bool {
+	code, _, _ := rbCmd([]string{dockerBin, "info", "--format", "{{.ServerVersion}}"}, 15*time.Second)
+	return code == 0
+}
+
+func journalLeftovers(s Settings) []M {
+	out := []M{}
+	for _, f := range journalFiles(s) {
+		raw, ok := jsonRead(f)
+		if !ok {
 			continue
 		}
 		j := journalFromMap(raw)
-		if pidAlive(j.RunnerPID) {
+		if !j.GaveUp || !journalTrusted(f, raw) {
+			continue
+		}
+		left := append(append(append([]string{}, j.Containers...), j.VMs...), j.Snapshots...)
+		if j.Snap != "" {
+			for i := len(j.Containers) + len(j.VMs); i < len(left); i++ {
+				left[i] += "@" + j.Snap
+			}
+		}
+		out = append(out, M{"id": strings.TrimSuffix(filepath.Base(f), ".json"), "left": left})
+	}
+	return out
+}
+
+func journalDismiss(s Settings, id string) bool {
+	if !reOpID.MatchString(id) {
+		return false
+	}
+	gone := false
+	for _, f := range []string{journalFile(s, id), RunDir + "/journal/" + id + ".json"} {
+		if raw, ok := jsonRead(f); ok && journalFromMap(raw).GaveUp && journalTrusted(f, raw) && os.Remove(f) == nil {
+			gone = true
+		}
+	}
+	return gone
+}
+
+func journalUntrusted(s Settings) string {
+	var bad []string
+	for _, f := range journalFiles(s) {
+		if raw, ok := jsonRead(f); ok && len(raw) > 0 && !journalTrusted(f, raw) {
+			bad = append(bad, f)
+		}
+	}
+	if len(bad) == 0 {
+		return ""
+	}
+	return strings.Join(bad, ", ") + " cannot be verified and is ignored: it was not written by this plugin, or " + SecretsDir + "/journal.key was replaced. If a backup was interrupted, check that its containers, VMs and snapshots are back to normal, then delete the file."
+}
+
+func journalRecover(s Settings) []JournalNotice {
+	done := []JournalNotice{}
+	t := now()
+	for _, file := range journalFiles(s) {
+		raw, ok := jsonRead(file)
+		if !ok || len(raw) == 0 || !journalTrusted(file, raw) {
+			continue
+		}
+		j := journalFromMap(raw)
+		if journalRunnerAlive(j) || t < j.Next || (len(j.Containers) > 0 && !dockerRunning()) {
 			continue
 		}
 		logf := func(msg string) {
@@ -939,14 +1084,24 @@ func journalRecover() []JournalNotice {
 		}
 		j.Attempts++
 		if len(failed) > 0 && j.Attempts < 30 {
-			jsonWrite(file, j.toMap(true), 0o644)
+			journalStore(file, j, true)
+			continue
+		}
+		if len(failed) > 0 && j.GaveUp {
+			j.Next = t + 3600
+			journalStore(file, j, true)
+			continue
+		}
+		if j.GaveUp {
+			logf("Put back what the interrupted backup had left: " + strings.Join(j.Done, ", ") + ".")
+			os.Remove(file)
 			continue
 		}
 		if j.Ended {
 			if len(failed) > 0 {
 				logf("Gave up removing the ZFS snapshot after 30 minutes: " + strings.Join(failed, "; "))
 				done = append(done, JournalNotice{"ZFS snapshot left behind", "A backup could not remove its ZFS snapshot, not in 30 minutes " +
-					"of trying: " + strings.Join(failed, "; ") + ". Remove it with zfs destroy once nothing has it mounted."})
+					"of trying: " + strings.Join(failed, "; ") + ". It stays listed on the plugin page and is retried every hour; or remove it with zfs destroy once nothing has it mounted."})
 			} else {
 				logf("Removed the ZFS snapshot that was still busy at the end.")
 			}
@@ -962,11 +1117,17 @@ func journalRecover() []JournalNotice {
 			logf(msg + ".")
 			desc := "A backup ended unexpectedly; " + what
 			if len(failed) > 0 {
-				desc += ". Could not, after 30 minutes of trying: " + strings.Join(failed, "; ")
+				desc += ". Could not, after 30 minutes of trying: " + strings.Join(failed, "; ") + ". It stays listed on the plugin page and is retried every hour."
 			} else {
 				desc += "."
 			}
 			done = append(done, JournalNotice{"Backup interrupted", desc})
+		}
+		if len(failed) > 0 {
+			j.GaveUp = true
+			j.Next = t + 3600
+			journalStore(file, j, true)
+			continue
 		}
 		os.Remove(file)
 	}

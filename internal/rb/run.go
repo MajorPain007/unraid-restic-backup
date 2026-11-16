@@ -480,16 +480,20 @@ func (r *runner) prepareConsistency(job Job) (bool, func([]string) []string) {
 	c := job.Consistency
 	mode := c.Mode
 	opID := r.id()
+	if journalKey(true) == nil {
+		r.finish("error", "Cannot create "+SecretsDir+"/journal.key on the flash drive. Without it, nothing could be put back after a crash, so nothing was stopped and nothing backed up. Check that the flash drive is writable.", nil)
+		return false, nil
+	}
 	j := Journal{Containers: []string{}, VMs: []string{}, Snapshots: []string{}, Log: str(r.op["log"])}
 	save := func() {
-		journalWrite(opID, j)
+		journalWrite(r.settings, opID, j)
 	}
 	r.onCleanup("clearing the journal", func() error {
 		if len(j.Snapshots) > 0 {
 			j.Ended = true
 			save()
 		} else {
-			journalClear(opID)
+			journalClear(r.settings, opID)
 		}
 		return nil
 	})

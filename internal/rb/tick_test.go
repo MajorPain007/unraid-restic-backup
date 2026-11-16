@@ -168,6 +168,25 @@ func TestTickLeavesARunAloneWhileResticStillRuns(t *testing.T) {
 	}
 }
 
+func TestTickLeavesTheJournalAloneWhileTheArrayIsStopped(t *testing.T) {
+	tickTestSetup(t)
+	calls := RunDir + "/calls"
+	oldDocker := dockerBin
+	t.Cleanup(func() { dockerBin = oldDocker })
+	os.WriteFile(RunDir+"/docker", []byte("#!/bin/sh\necho \"docker $*\" >> "+calls+"\n"), 0o755)
+	dockerBin = RunDir + "/docker"
+	os.MkdirAll(RunDir+"/journal", 0o755)
+	os.WriteFile(RunDir+"/journal/20261115-030000-abcd.json", []byte(`{"containers":["web"],"vms":[],"snapshots":[],"runner_pid":999999}`), 0o644)
+	os.WriteFile(VarIni, []byte("mdState=\"STOPPED\"\nfsState=\"Stopped\"\n"), 0o644)
+	cmdTick(nil)
+	if c, _ := os.ReadFile(calls); strings.Contains(string(c), "start") {
+		t.Fatalf("with the array stopped nothing may be started: %s", c)
+	}
+	if !exists(RunDir + "/journal/20261115-030000-abcd.json") {
+		t.Fatal("the journal must stay until the array is up")
+	}
+}
+
 func TestTwoJobsAtTheSameTimeBothRun(t *testing.T) {
 	cfg, _, spawned := tickTestSetup(t)
 	cfg.Settings.Secrets = "plain"

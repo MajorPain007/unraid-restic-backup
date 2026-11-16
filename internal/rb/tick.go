@@ -99,6 +99,10 @@ func reapDeadRuns(cfg *Config) {
 		if !ok || str(m["boot"]) == bootID() {
 			continue
 		}
+		if len(historyRead(cfg.Settings, M{"id": m["id"]}, 1)) > 0 {
+			os.Remove(f)
+			continue
+		}
 		op := M{"status": "running", "ended": int64(0)}
 		for _, k := range append([]string{"id"}, runMarkFields...) {
 			op[k] = m[k]
@@ -129,7 +133,7 @@ func (r *runner) markStart() {
 		return
 	}
 	m := M{"boot": bootID()}
-	for _, k := range runMarkFields[:len(runMarkFields)-1] {
+	for _, k := range []string{"kind", "job", "job_name", "repo", "repo_name", "trigger", "started", "log"} {
 		m[k] = r.op[k]
 	}
 	m["mac"] = signMAC(r.id(), m, runMarkFields, key)

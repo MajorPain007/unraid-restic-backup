@@ -391,6 +391,9 @@ func TestARunCutOffByARebootShowsUpAsInterrupted(t *testing.T) {
 	}
 
 	os.RemoveAll(OpsDir)
+	if _, ok := runMarkRead(mark); !ok {
+		t.Fatal("the mark as written verifies")
+	}
 	m, _ := jsonRead(mark)
 	m["boot"] = "an-earlier-boot"
 	m["mac"] = signMAC(r.id(), m, runMarkFields, journalKey(false))
@@ -416,9 +419,10 @@ func TestARunCutOffByARebootShowsUpAsInterrupted(t *testing.T) {
 	if why := journalUntrusted(cfg.Settings); !strings.Contains(why, forged) {
 		t.Fatalf("the forged mark is reported, got %q", why)
 	}
+	jsonWrite(mark, m, 0o644)
 	reapDeadRuns(configLoad())
-	if len(historyRead(cfg.Settings, M{}, 10)) != 1 {
-		t.Fatal("it is recorded once")
+	if len(historyRead(cfg.Settings, M{}, 10)) != 1 || exists(mark) {
+		t.Fatal("a copy of the mark put back later is recorded no second time, and removed")
 	}
 }
 

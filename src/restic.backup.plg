@@ -2,8 +2,8 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "restic.backup">
 <!ENTITY author    "MajorPain007">
-<!ENTITY version   "2026.11.16.01">
-<!ENTITY md5       "e072820c51354b88b2131df566f2ba74">
+<!ENTITY version   "2026.11.16.02">
+<!ENTITY md5       "c49be5fa30c17a00615884fbe7654b9d">
 <!ENTITY launch    "Settings/ResticBackup">
 <!ENTITY github    "MajorPain007/unraid-restic-backup">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/src/&name;.plg">
@@ -21,6 +21,20 @@
         icon="history">
 
 <CHANGES>
+## Version 2026.11.16.02 - Recovery after a reboot
+
+- Putting containers, VMs and snapshots back after an interrupted backup
+  survives a reboot again. The journal in the data folder is signed with a key
+  on the flash drive; a journal that cannot be verified is reported and never
+  acted on.
+- A run cut off by a reboot or power loss shows up as interrupted in the
+  history, the job and a notification.
+- A password mode change cut off by a crash is finished or undone on its own.
+- Saving a repository changes its password and keys only once the settings
+  are saved.
+- Wiping a key never writes through a symbolic link.
+- The start buttons say when a run could not be started.
+- Unused options and fields removed.
 ## Version 2026.11.16.01 - Safer runs and settings
 
 - A damaged config.json is reported and never saved over; settings are synced

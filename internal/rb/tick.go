@@ -61,6 +61,7 @@ func cmdTick(args []string) int {
 	if notifyOnce("config_problem", "Restic Backup cannot read its settings", configProblem()) {
 		return 0
 	}
+	secretsRepair()
 	if !arrayStarted() {
 		return 0
 	}

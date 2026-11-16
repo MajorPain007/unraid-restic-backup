@@ -160,12 +160,16 @@ func secretExists(repoID, kind string) bool {
 
 func secretRemove(repoID string) {
 	for _, kind := range []string{"password", "rest"} {
-		os.Remove(plainSecretFile(repoID, kind))
-		os.Remove(encSecretFile(repoID, kind))
+		for _, f := range []string{plainSecretFile(repoID, kind), encSecretFile(repoID, kind)} {
+			os.Remove(f)
+			shred(f + ".new")
+		}
 		os.Remove(runSecretsDir() + "/" + repoID + "." + kind)
 	}
-	os.Remove(sshPlainKey(repoID))
-	os.Remove(sshEncKey(repoID))
+	for _, f := range []string{sshPlainKey(repoID), sshEncKey(repoID)} {
+		os.Remove(f)
+		shred(f + ".new")
+	}
 	os.Remove(sshPlainKey(repoID) + ".pub")
 	os.Remove(runSecretsDir() + "/ssh-" + repoID)
 }
@@ -366,6 +370,46 @@ func collectSecrets(cfg *Config) ([]secretItem, error) {
 	return items, nil
 }
 
+func secretsHalfDone() []string {
+	a, _ := filepath.Glob(SecretsDir + "/*.new")
+	b, _ := filepath.Glob(SSHDir + "/*.new")
+	c, _ := filepath.Glob(keyFile(configLoad().Settings) + ".new")
+	return append(append(a, b...), c...)
+}
+
+func secretsRepair() {
+	if len(secretsHalfDone()) == 0 {
+		return
+	}
+	l := configLock()
+	defer l.Unlock()
+	settings := configLoad().Settings
+	mode, kf := settings.Secrets, keyFile(settings)
+	for _, f := range secretsHalfDone() {
+		final := strings.TrimSuffix(f, ".new")
+		enc := strings.HasSuffix(final, ".enc")
+		current := enc == (mode != "plain")
+		if final == masterFile() {
+			current = mode == "master"
+		}
+		if final == kf {
+			current = mode == "key"
+		}
+		if !current {
+			shred(f)
+			continue
+		}
+		if os.Rename(f, final) != nil || final == masterFile() || final == kf {
+			continue
+		}
+		if enc {
+			shred(strings.TrimSuffix(final, ".enc"))
+		} else {
+			os.Remove(final + ".enc")
+		}
+	}
+}
+
 func secretsSwitch(cfg *Config, mode, password string) (func(saved bool), error) {
 	staged := []string{}
 	stage := func(path string, data []byte) bool {
@@ -463,7 +507,9 @@ func secretsSwitch(cfg *Config, mode, password string) (func(saved bool), error)
 			return
 		}
 		for _, p := range staged {
-			os.Rename(p+".new", p)
+			if os.Rename(p+".new", p) != nil {
+				return
+			}
 		}
 		for _, it := range items {
 			if mode == "plain" {

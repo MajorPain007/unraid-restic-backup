@@ -43,8 +43,48 @@ func TestABackupRunEndsInTheHistory(t *testing.T) {
 	if left, _ := os.ReadDir(runMarkDir(cfg.Settings)); len(left) != 0 {
 		t.Fatal("no run mark stays")
 	}
-	if b, _ := os.ReadFile(str(h[0]["log"])); !strings.Contains(string(b), "Finished: success") {
-		t.Fatalf("the log ends with the result: %s", b)
+	if b, _ := os.ReadFile(str(h[0]["log"])); !strings.Contains(string(b), "Finished: success") || !strings.Contains(string(b), "Snapshot abcdef12:") {
+		t.Fatalf("the log names the snapshot and ends with the result: %s", b)
+	}
+	if sizes, _ := js["sizes"].([]any); len(sizes) != 1 {
+		t.Fatalf("one size point per successful run: %v", js["sizes"])
+	}
+	stateUpdate(cfg.Settings, func(st M) {
+		p := sub(st, "jobs", "j00000001")["sizes"].([]any)[0].([]any)
+		p[0] = toInt64(p[0]) - 3600
+	})
+	cmdRun([]string{"backup", "j00000001", "manual"})
+	js = mapOf(mapOf(stateRead(cfg.Settings)["jobs"])["j00000001"])
+	if sizes, _ := js["sizes"].([]any); len(sizes) != 2 || len(historyRead(cfg.Settings, M{}, 5)) != 2 {
+		t.Fatalf("a later run adds a second point: %v", js["sizes"])
+	}
+}
+
+func TestABackupWithUnreadableFilesIsAWarning(t *testing.T) {
+	cfg := runSetup(t)
+	fakeRestic(t, `echo '{"message_type":"error","error":{"message":"open /x: permission denied"},"during":"archival","item":"/x"}'; echo '{"message_type":"summary","snapshot_id":"abcdef1234567890","files_new":1,"data_added":5}'; exit 3`)
+	cmdRun([]string{"backup", "j00000001", "manual"})
+	h := historyRead(cfg.Settings, M{}, 5)
+	if len(h) != 1 || str(h[0]["status"]) != "warning" || str(h[0]["error"]) == "" {
+		t.Fatalf("a snapshot with unreadable files is a warning that says why: %v", h)
+	}
+	js := mapOf(mapOf(stateRead(cfg.Settings)["jobs"])["j00000001"])
+	if sizes, _ := js["sizes"].([]any); len(sizes) != 1 || toInt64(js["last_success"]) == 0 {
+		t.Fatalf("a warning still counts as a backup: %v", js)
+	}
+}
+
+func TestABackupWithoutItsRepositoryStopsEarly(t *testing.T) {
+	cfg := runSetup(t)
+	fakeRestic(t, `echo '{"message_type":"summary","snapshot_id":"abcdef1234567890"}'; exit 0`)
+	os.Remove(cfg.Repos[0].Local.Path + "/config")
+	cmdRun([]string{"backup", "j00000001", "manual"})
+	h := historyRead(cfg.Settings, M{}, 5)
+	if len(h) != 1 || str(h[0]["status"]) != "error" || !strings.Contains(str(h[0]["error"]), "is the disk mounted") {
+		t.Fatalf("a missing repository is named before anything runs: %v", h)
+	}
+	if b, _ := os.ReadFile(str(h[0]["log"])); !strings.Contains(string(b), "Finished: error - No repository") {
+		t.Fatalf("the log says why: %s", b)
 	}
 }
 
@@ -56,7 +96,8 @@ func TestAFailedBackupSaysWhy(t *testing.T) {
 	if len(h) != 1 || str(h[0]["status"]) != "error" || !strings.Contains(str(h[0]["error"]), "unable to open repository") {
 		t.Fatalf("the error is kept with restic's reason: %v", h)
 	}
-	if toInt64(mapOf(mapOf(stateRead(cfg.Settings)["jobs"])["j00000001"])["last_success"]) != 0 {
-		t.Fatal("a failed run is no success")
+	js := mapOf(mapOf(stateRead(cfg.Settings)["jobs"])["j00000001"])
+	if toInt64(js["last_success"]) != 0 || js["sizes"] != nil {
+		t.Fatalf("a failed run is no success and adds no size point: %v", js)
 	}
 }

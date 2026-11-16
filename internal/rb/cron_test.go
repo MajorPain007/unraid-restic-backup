@@ -196,3 +196,14 @@ func TestCronRareScheduleIsQuick(t *testing.T) {
 	}
 	cronEq(t, "2027-02-01 00:00 Mon", cronFmt(c.next(cronAt(t, "2026-10-01"))), "the first Monday in February")
 }
+
+func TestCronEdgesThatMatter(t *testing.T) {
+	cronTestZone(t)
+	cronEq(t, cronFmt(cronMust(t, "0 3 * * sat").next(cronAt(t, "2026-10-01"))), cronFmt(cronMust(t, "0 3 * * SAT").next(cronAt(t, "2026-10-01"))), "names in capitals")
+	cronEq(t, "2026-10-01 10:11 Thu", cronFmt(cronMust(t, "*/1 * * * *").next(cronAt(t, "2026-10-01 10:10"))), "a step of 1")
+	cronEq(t, "2026-10-02 05:00 Fri", cronFmt(cronMust(t, "0 5-5 * * *").next(cronAt(t, "2026-10-01 10:10"))), "a range of one hour")
+	cronEq(t, "2026-10-01 10:59 Thu", cronFmt(cronMust(t, "59 * * * *").next(cronAt(t, "2026-10-01 10:10"))), "minute 59")
+	cronEq(t, "2026-10-01 09:45 Thu", cronFmt(cronMust(t, "45 * * * *").prev(cronAt(t, "2026-10-01 10:10"))), "an earlier hour keeps all its minutes")
+	cronEq(t, "2026-10-01 03:00 Thu", cronFmt(cronMust(t, "0 3 1 * *").prev(cronAt(t, "2026-10-15 12:00"))), "back to the 1st of the month")
+	cronEq(t, "2027-01-15 03:00 Fri", cronFmt(cronMust(t, "0 3 15 1 *").prev(cronAt(t, "2027-02-10 12:00"))), "back into January")
+}

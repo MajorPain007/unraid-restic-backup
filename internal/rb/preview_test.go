@@ -46,6 +46,10 @@ func TestFilterMatchCases(t *testing.T) {
 		{"\\*", false, "/x/y", false},
 		{"*.jpg", true, "/x/Y.JPG", true},
 		{"äpfel", true, "/x/ÄPFEL", true},
+		{"/a/**/c", false, "/a/b/b/c", true},
+		{"/a/**/c", false, "/a/b/b/d", false},
+		{"/a/**", false, "/a/b/c", true},
+		{"**", false, "/x", true},
 	}
 	for _, c := range cases {
 		p := filterParse(c.pattern, c.lower)
@@ -268,5 +272,17 @@ func TestPreviewRunShape(t *testing.T) {
 	f, _ = previewFolder(job, testRepo("sftp", ""), Settings{}, root, root, 3)
 	if f["more"] == 0 || len(f["entries"].([]M)) != 3 {
 		t.Errorf("limit: %v", f)
+	}
+}
+
+func TestPreviewSourceOfPicksTheDeepestSource(t *testing.T) {
+	for _, srcs := range [][]string{{"/mnt/user", "/mnt/user/docs"}, {"/mnt/user/docs", "/mnt/user"}} {
+		job := Job{Sources: srcs}
+		if got := previewSourceOf(job, "/mnt/user/docs/a.txt"); got != "/mnt/user/docs" {
+			t.Errorf("%v: got %q", srcs, got)
+		}
+		if got := previewSourceOf(job, "/mnt/user/media/b"); got != "/mnt/user" {
+			t.Errorf("%v: got %q", srcs, got)
+		}
 	}
 }

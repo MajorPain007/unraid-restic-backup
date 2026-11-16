@@ -34,20 +34,20 @@ func apiRepoSave(p M) (M, error) {
 	password := pstr(p, "password", "")
 	restPassword := pstr(p, "rest_password", "")
 	restPasswordMode := pstr(p, "rest_password_mode", "keep")
-	return configChange(func(cfg *Config) (M, error) {
+	return configChangeThen(func(cfg *Config) (M, func(bool), error) {
 		errs := []string{}
 		isNew := !phpTruthy(in["id"])
 		if passwordMode == "generate" && !isNew {
-			return nil, apiFail("A password is only generated for a new repository. Set one instead, or keep the stored one.")
+			return nil, nil, apiFail("A password is only generated for a new repository. Set one instead, or keep the stored one.")
 		}
 		if isNew {
 			in["id"] = newID("r")
 		} else if cfg.repoIndex(str(in["id"])) < 0 {
-			return nil, apiFail("That repository does not exist (any more).")
+			return nil, nil, apiFail("That repository does not exist (any more).")
 		}
 		repo := cleanRepo(in, &errs)
 		if repo.ID == "" {
-			return nil, apiFail("Malformed repository ID")
+			return nil, nil, apiFail("Malformed repository ID")
 		}
 		if passwordMode == "set" && password == "" {
 			errs = append(errs, "Password: enter the repository password")
@@ -66,7 +66,31 @@ func apiRepoSave(p M) (M, error) {
 			}
 		}
 		if len(errs) > 0 {
-			return nil, apiFail("Please correct the marked fields.", errs...)
+			return nil, nil, apiFail("Please correct the marked fields.", errs...)
+		}
+		if repo.Type == "sftp" && !sshKeyExists(repo.ID) {
+			if _, err := sshKeygen(repo.ID); err != nil {
+				return nil, nil, err
+			}
+		}
+		oldPassword, hadRest, oldRest := secretGet(repo.ID, "password"), secretHas(repo.ID, "rest"), secretGet(repo.ID, "rest")
+		setRest := repo.Type == "rest" && restPasswordMode == "set"
+		undo := func(saved bool) {
+			switch {
+			case saved:
+			case isNew:
+				secretRemove(repo.ID)
+			default:
+				if passwordMode != "keep" {
+					secretSet(repo.ID, "password", oldPassword)
+				}
+				if setRest && hadRest {
+					secretSet(repo.ID, "rest", oldRest)
+				} else if setRest {
+					os.Remove(plainSecretFile(repo.ID, "rest"))
+					os.Remove(encSecretFile(repo.ID, "rest"))
+				}
+			}
 		}
 		generated := ""
 		if passwordMode == "generate" {
@@ -74,9 +98,10 @@ func apiRepoSave(p M) (M, error) {
 			password = generated
 		}
 		if passwordMode != "keep" && !secretSet(repo.ID, "password", password) {
-			return nil, apiFail("The password could not be stored.")
+			undo(false)
+			return nil, nil, apiFail("The password could not be stored.")
 		}
-		if repo.Type == "rest" && restPasswordMode == "set" {
+		if setRest {
 			secretSet(repo.ID, "rest", restPassword)
 		}
 		if i := cfg.repoIndex(repo.ID); i < 0 {
@@ -84,13 +109,8 @@ func apiRepoSave(p M) (M, error) {
 		} else {
 			cfg.Repos[i] = repo
 		}
-		if repo.Type == "sftp" && !sshKeyExists(repo.ID) {
-			if _, err := sshKeygen(repo.ID); err != nil {
-				return nil, err
-			}
-		}
 		browseStop(repo.ID, 0)
-		return M{"repo": repoPublic(repo), "generated_password": generated, "created": isNew}, nil
+		return M{"repo": repoPublic(repo), "generated_password": generated, "created": isNew}, undo, nil
 	})
 }
 

@@ -1,6 +1,7 @@
 package rb
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,5 +56,46 @@ func TestSecretsStayWhenTheSettingsCannotBeSaved(t *testing.T) {
 	}
 	if exists(masterFile()) {
 		t.Fatal("a master file of a switch that did not happen was left behind")
+	}
+}
+
+func TestARepositoryPasswordChangesOnlyWithTheSettings(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the read-only folder")
+	}
+	base := useTestDirs(t)
+	repo := defaultRepo()
+	repo.ID, repo.Name, repo.Type, repo.Local.Path = "r00000001", "a", "local", "/mnt/disks/backup/restic"
+	cfg := &Config{Version: 1, Settings: defaultSettings(), Repos: []Repo{repo}, Jobs: []Job{}}
+	cfg.Settings.DataDir = base + "/pool"
+	saveMode(t, cfg, "plain")
+	secretSet("r00000001", "password", "old-password-1")
+	privateDir(SSHDir)
+	var existing M
+	json.Unmarshal(jsonEncode(cfg.Repos[0], false), &existing)
+	existing["name"] = "renamed"
+	fresh := M{"name": "b", "type": "local", "local": M{"path": "/mnt/disks/other/restic"}}
+	sftp := M{"name": "c", "type": "sftp", "sftp": M{"host": "backup.example", "user": "u", "path": "restic"}}
+	os.Chmod(ConfigDir, 0o500)
+	t.Cleanup(func() { os.Chmod(ConfigDir, 0o755) })
+
+	if _, err := apiRepoSave(M{"repo": existing, "password_mode": "set", "password": "new-password-2"}); err == nil {
+		t.Fatal("the save must report that nothing was saved")
+	}
+	if secretGet("r00000001", "password") != "old-password-1" {
+		t.Fatal("the stored password changed although the settings were not saved")
+	}
+	for _, r := range []M{fresh, sftp} {
+		if _, err := apiRepoSave(M{"repo": r, "password_mode": "generate"}); err == nil {
+			t.Fatalf("saving %v must fail", r["name"])
+		}
+	}
+	for _, dir := range []string{SecretsDir, SSHDir} {
+		left, _ := filepath.Glob(dir + "/*")
+		for _, f := range left {
+			if !strings.Contains(f, "r00000001") && !strings.HasPrefix(filepath.Base(f), ".") {
+				t.Fatalf("a repository that was never saved left %s", f)
+			}
+		}
 	}
 }

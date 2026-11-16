@@ -107,14 +107,13 @@ func apiOverview(p M) (M, error) {
 				"added": mapOf(h["summary"])["data_added_packed"]})
 		}
 		jobs = append(jobs, M{
-			"id":           job.ID,
-			"schedule":     schedDescribe(job.Schedule),
-			"next":         next,
-			"last":         js["last"],
-			"last_success": js["last_success"],
-			"queued":       phpTruthy(js["queued"]),
-			"running":      op,
-			"recent":       recent,
+			"id":       job.ID,
+			"schedule": schedDescribe(job.Schedule),
+			"next":     next,
+			"last":     js["last"],
+			"queued":   phpTruthy(js["queued"]),
+			"running":  op,
+			"recent":   recent,
 		})
 	}
 	repos := []M{}
@@ -282,7 +281,7 @@ func apiSchedulePreview(p M) (M, error) {
 			next = append(next, t+i*step)
 		}
 	}
-	return M{"valid": true, "description": schedDescribe(s), "next": next}, nil
+	return M{"valid": true, "next": next}, nil
 }
 
 func apiConsistencyDetect(p M) (M, error) {
@@ -293,7 +292,7 @@ func apiConsistencyDetect(p M) (M, error) {
 	sources := []string{}
 	for _, src := range in {
 		path := sourcePath(src)
-		if path != "" && (under(path, "/mnt") || under(path, "/boot")) {
+		if path != "" && hostPath(path) {
 			sources = append(sources, path)
 		}
 	}
@@ -343,7 +342,7 @@ func apiBrowse(p M) (M, error) {
 	if path == "" || path == "/" {
 		return root, nil
 	}
-	if !(under(path, "/mnt") || under(path, "/boot")) {
+	if !hostPath(path) {
 		return nil, apiFail("Only folders under /mnt and /boot can be chosen.")
 	}
 	for !isDir(path) && path != "/mnt" && path != "/boot" {

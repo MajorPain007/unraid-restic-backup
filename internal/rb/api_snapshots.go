@@ -125,7 +125,7 @@ func apiSnapshots(p M) (M, error) {
 		}
 		names = m
 	}
-	return M{"snapshots": list, "job_names": names, "cached_at": fileMtime(cache)}, nil
+	return M{"snapshots": list, "job_names": names}, nil
 }
 
 func md5hex(s string) string {
@@ -274,18 +274,7 @@ func apiFind(p M) (M, error) {
 	if pattern == "" || strings.ContainsAny(pattern, "\x00\n\r") {
 		return nil, apiFail("Enter a file name or a pattern such as *.jpg")
 	}
-	args := []string{"find", "--json", "--no-lock"}
-	if pstr(p, "snapshot", "") != "" {
-		snap, err := needSnapshotID(param(p, "snapshot", ""))
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, "--snapshot", snap)
-	}
-	if toBool(param(p, "ignore_case", true)) {
-		args = append(args, "--ignore-case")
-	}
-	args = append(args, "--", pattern)
+	args := []string{"find", "--json", "--no-lock", "--ignore-case", "--", pattern}
 	out, err := apiRestic(cfg, repo, args, 200000)
 	if err != nil {
 		return nil, err
@@ -440,7 +429,7 @@ func apiRestoreStart(p M) (M, error) {
 			if path == "/" {
 				return nil, apiFail("Restoring a whole snapshot to where it came from would write over the server. Restore it into a folder instead.")
 			}
-			if !(under(path, "/mnt") || under(path, "/boot")) {
+			if !hostPath(path) {
 				return nil, apiFail(path + " did not come from /mnt or /boot; restore it into a folder instead.")
 			}
 		}

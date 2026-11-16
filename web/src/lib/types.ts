@@ -120,7 +120,6 @@ export interface LastRun {
 export interface JobInfo {
   id: string;
   last?: LastRun | null;
-  last_success?: number;
   next?: number | null;
   queued?: boolean;
   recent: { id: string; status: Status; started: number; ended: number; added: number }[];

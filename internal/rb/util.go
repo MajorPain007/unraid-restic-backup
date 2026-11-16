@@ -400,6 +400,10 @@ func pidAlive(v any) bool {
 	return !strings.HasPrefix(rest, "Z")
 }
 
+func hostPath(p string) bool {
+	return under(p, "/mnt") || under(p, "/boot")
+}
+
 func under(path, dir string) bool {
 	return path == dir || strings.HasPrefix(path, strings.TrimRight(dir, "/")+"/")
 }

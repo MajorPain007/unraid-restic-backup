@@ -639,7 +639,7 @@ func cleanJob(in M, repoIDs []string, errs *[]string) Job {
 	}
 	for _, src := range list(get(in, "sources", []any{}), 100) {
 		p := sourcePath(src)
-		if p == "" || !(under(p, "/mnt") || under(p, "/boot")) || p == "/mnt" {
+		if p == "" || !hostPath(p) || p == "/mnt" {
 			*errs = append(*errs, fmt.Sprintf("Sources: \"%s\" - choose folders under /mnt or /boot", src))
 			continue
 		}
